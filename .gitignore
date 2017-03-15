@@ -1,3 +1,9 @@
+##Project specific gitignore
+*.mp3
+secrets.py
+
+
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
