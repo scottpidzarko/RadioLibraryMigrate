@@ -1,7 +1,7 @@
 ##Project specific gitignore
 *.mp3
 secrets.py
-
+LibraryTest/*/*.mp3
 
 
 # Byte-compiled / optimized / DLL files

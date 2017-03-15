@@ -59,7 +59,7 @@ import MySQLdb
 #Load db credentials
 import secrets
 
-def main():
+def test():
     audiofile = eyed3.load('pinkfloyd.mp3');
     print audiofile.tag.artist;
     print audiofile.tag.title;
@@ -81,6 +81,9 @@ def main():
 
     # disconnect from server
     db.close()
+
+def main():
+    
 
 if __name__ == "__main__":
     main()
