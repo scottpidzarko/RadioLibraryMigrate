@@ -52,8 +52,19 @@
 ## disconnect from server
 #db.close()
 
+"""
+Moving files:
+
+ensure_dir(working_directory + "/" + arr[0] + "/" + arr[1] + "/" + arr[2] + "/")
+        source_filename = os.path.normpath(staging_dir + "/" + file_name )
+        dest_filename = os.path.normpath(working_directory + "/" + arr[0] + "/" + arr[1] + "/" + arr[2] + "/" + file_name)
+        #move that file
+        os.rename(source_filename,dest_filename)
+"""
 #############################################################################
 
+##For yes/no prompt
+import sys
 ##For File moves
 import fnmatch
 import os
@@ -66,9 +77,18 @@ import MySQLdb as my
 ## Install with pip install fuzzywuzzy[speedup]
 #Load db credentials from here
 import secrets
+#To get the current datetime
+from datetime import datetime
 
-#root folder of library
+#root folder of library to organize
 libary_basedir = "/home/scott/git/RadioLibraryMigrate/LibraryTest"
+
+#working_directory, where the log file is put and any other generated assets
+working_directory = "/home/scott/git/RadioLibraryMigrate/log"
+
+#log file name
+#for now, we don't have the option of disabling this
+log_file = "libraryMigrate-log.txt"
 
 def test():
     audiofile = eyed3.load('test.mp3');
@@ -79,38 +99,50 @@ def test():
     # execute SQL query using execute() method.
     data = executeSQL("SELECT VERSION()");
 
-    print "Database version : %s " % data
+    writeLog("Database version : %s " % data);
 
 
 def main():
 
     for path, dirs, files in os.walk(libary_basedir):
-        print "Going into " + path
+        writeLog("Going into " + path)
         for f in files:
-            print "Processing: \"" + f + "\"";
+            writeLog("Processing: \"" + f + "\"");
             audiofile=eyed3.load(os.path.normpath(path + "/" + f));
             artist =  audiofile.tag.artist;
             album_title =  audiofile.tag.album;
             song_title = audiofile.tag.title;
             track_num = audiofile.tag.track_num[0];
-            print "Artist: " + artist + ", Album: " + album_title + ", Title: " + song_title + ", #" + str(track_num);
+            writeLog("Artist: " + artist + ", Album: " + album_title + ", Title: " + song_title + ", #" + str(track_num))
 
             #try and find the albumID for the song from the library table first with an exact match and then a fuzzy finder
             ## also wtf is the title S/T?
-            sql = "SELECT * FROM library where title like %s";
-            data = executeSQL(sql, [album_title])
+            sql = "SELECT %s FROM library where title like %s;"
+            data = executeSQL(sql, [id,album_title])
+            writeLog(data);
 
-            #Found a match
-            if(data):
-                print "Match Found for " + song_title
+            if(len(data) == 1):
+                #Found a unique match
+                writeLog("Match Found for " + song_title)
                 #Write to DB
 
                 #move to correct folder
 
+                #Determine if the artist has "the" in their name/group
+                #if so, will use "artist, the" structure
                 #if(artist.split(0,2) == "the" || artist.split(0,2) == "The" )
+            elif(len(data) > 1):
+                for i in data:
+                    print i
+                #Multiple albums with that name, try and match by artist
+                print("Multiple albums found for %s", album_title)
+                print("Trying to match based on artist ...")
+                sql = "SELECT %s FROM library where title like %s and artist like %s;"
+                data = executeSQL(sql, ["id",album_title,artist])
+                print data;
             else:
+                #no match, move to the "potential problems folder" and log, with potential matches using fuzzy finder
                 print "No exact match found for " + song_title
-                #no match, move to the "potential problems folder"
 
 """""
 Runs the query given by sql query and the array of parameters given in params. Defaults to no parameters if none are passed
@@ -209,5 +241,53 @@ def executeSQL(sqlquery, params=None):
         except :
             print("Unknown error occurred")
 
+#helper function to ensure the working directory exists where f is the input directory
+def ensure_dir(f):
+    d = os.path.dirname(f)
+    if not os.path.exists(d):
+        os.makedirs(d)
+
+#helper function to elicit a y/n response from the user given the question contained in the question string
+def query_yes_no(question, default="yes"):
+    """Ask a yes/no question via raw_input() and return their answer.
+    "question" is a string that is presented to the user.
+    "default" is the presumed answer if the user just hits <Enter>.
+        It must be "yes" (the default), "no" or None (meaning
+        an answer is required of the user).
+    The "answer" return value is True for "yes" or False for "no".
+    """
+    valid = {"yes": True, "y": True, "ye": True,
+             "no": False, "n": False}
+    if default is None:
+        prompt = " [y/n] "
+    elif default == "yes":
+        prompt = " [Y/n] "
+    elif default == "no":
+        prompt = " [y/N] "
+    else:
+        raise ValueError("invalid default answer: '%s'" % default)
+
+    while True:
+        sys.stdout.write(question + prompt)
+        choice = input().lower()
+        if default is not None and choice == '':
+            return valid[default]
+        elif choice in valid:
+            return valid[choice]
+        else:
+            sys.stdout.write("Please respond with 'yes' or 'no' "
+                             "(or 'y' or 'n').\n")
+
+def writeLog(instring):
+    #write that we're starting a batch job to the log file
+    try:
+        log = open( os.path.normpath( working_directory + "/" + log_file), 'a' )
+    except IOError:
+        print "Error: Log File does not appear to exist or you do not have the permissions to write to it!."
+        return
+    log.write( "[" + str(datetime.now()) + "]" + "    ")
+    log.write(instring + "\n")
+    log.close()
+
 if __name__ == "__main__":
-    main()
+    test()

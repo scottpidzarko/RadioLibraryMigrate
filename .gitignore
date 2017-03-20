@@ -2,6 +2,7 @@
 *.mp3
 secrets.py
 LibraryTest/*/*.mp3
+log/*
 
 
 # Byte-compiled / optimized / DLL files
