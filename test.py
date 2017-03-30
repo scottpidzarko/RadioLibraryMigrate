@@ -68,6 +68,7 @@ import sys
 ##For File moves
 import fnmatch
 import os
+import os.path
 import shutil
 ##For MP3 ID3 tags
 import eyed3
@@ -79,9 +80,14 @@ import MySQLdb as my
 import secrets
 #To get the current datetime
 from datetime import datetime
+#for regular expressions
+import re
 
 #root folder of library to organize
 libary_basedir = "/home/scott/git/RadioLibraryMigrate/LibraryTest"
+
+#destination for reorganized files to go
+library_destination = "/home/scott/Music/Test/"
 
 #working_directory, where the log file is put and any other generated assets
 working_directory = "/home/scott/git/RadioLibraryMigrate/log"
@@ -89,6 +95,9 @@ working_directory = "/home/scott/git/RadioLibraryMigrate/log"
 #log file name
 #for now, we don't have the option of disabling this
 log_file = "libraryMigrate-log.txt"
+
+#regex pattern for detecting "the" at the start of a string
+reForThe = re.compile('^the', re.IGNORECASE);
 
 def test():
     audiofile = eyed3.load('test.mp3');
@@ -103,6 +112,9 @@ def test():
 
 
 def main():
+    writeLog("----------------------------------------------------------------")
+    writeLog("---  Library Conversion run started at " + str(datetime.now()) + "---")
+    writeLog("----------------------------------------------------------------")
 
     for path, dirs, files in os.walk(libary_basedir):
         writeLog("Going into " + path)
@@ -113,36 +125,103 @@ def main():
             album_title =  audiofile.tag.album;
             song_title = audiofile.tag.title;
             track_num = audiofile.tag.track_num[0];
+            category = audiofile.tag.comments
+            #can safely default to category 20 since that's the most common
+            if(category == "category 1"):
+                category = 10
+            elif(category == "category 3"):
+                category = 30
+            elif(category == "category 4"):
+                category = 40
+            elif(category == "category 5"):
+                category = 50
+            else:
+                category = 20
+
             writeLog("Artist: " + artist + ", Album: " + album_title + ", Title: " + song_title + ", #" + str(track_num))
 
             #try and find the albumID for the song from the library table first with an exact match and then a fuzzy finder
             ## also wtf is the title S/T?
-            sql = "SELECT %s FROM library where title like %s;"
-            data = executeSQL(sql, [id,album_title])
-            writeLog(data);
+            sql = "SELECT id FROM library where title like %s;"
+            data = executeSQL(sql, [album_title])
 
             if(len(data) == 1):
                 #Found a unique match
-                writeLog("Match Found for " + song_title)
-                #Write to DB
-
-                #move to correct folder
+                writeLog("Exact Match Found for " + song_title)
+                writeLog(data[0][0]);
 
                 #Determine if the artist has "the" in their name/group
                 #if so, will use "artist, the" structure
-                #if(artist.split(0,2) == "the" || artist.split(0,2) == "The" )
+                if(reForThe.match(artist)):
+                    artist = artist[4:0] + ", The"
+
+                #Write to DB
+                #DB will assign song ID so we're good
+                sql = "INSERT INTO library_songs (album_id, artist, album_title, song_title, track_num, updated_at, created_at)"
+                "VALUES (%s, %s, %s, %s, %s, %s, %s, %s);"
+                executeSQL(sql, [data[0][0],artist, album_title, song_title, track_num, datetime.now(),datetime.now()])
+
+                uppercaseArtist = artist.upper()
+
+                #move to correct folder
+                ensure_dir(library_destination + "/" + uppercaseArtist[0:1] + "/" + uppercaseArtist[0:2] + "/" + artist)
+                source_filename = os.path.normpath(path + "/" + f)
+                dest_filename = os.path.normpath(library_destination + "/" + uppercaseArtist[0:1] + "/" + uppercaseArtist[0:2] + "/" + artist + "/" + track_num + " " + artist + " - " + song_title)
+                shutil.copy2(source_filename,dest_filename)
+
+                writeLog("Copied " + source_filename + " to " + dest_filename)
+
             elif(len(data) > 1):
                 for i in data:
-                    print i
+                    writeLog(i[0])
+
                 #Multiple albums with that name, try and match by artist
-                print("Multiple albums found for %s", album_title)
-                print("Trying to match based on artist ...")
+                writeLog("Multiple albums found for " + album_title)
+                writeLog("Trying to match based on artist ...")
                 sql = "SELECT %s FROM library where title like %s and artist like %s;"
                 data = executeSQL(sql, ["id",album_title,artist])
-                print data;
+                writeLog(data);
+
+                if(len(data) == 1):
+                    #found an exact match for artist + album title
+                elif:(len(data) > 1):
+                    #found many matches again
+                    #move into "inconclusive" folder
+                else:
+                    #No matches found - title is matching multiple but can't find an artist name
+                    #move into "inconclusive" folder
+
+                ##Singled down to a single result
+
+                #if so, will use "artist, the" structure
+                if(reForThe.match(artist)):
+                    artist = artist[4:0] + ", The"
+
+                #Write to DB
+                #DB will assign song ID so we're good
+                sql = "INSERT INTO songs (album_id, artist, album_title, song_title, track_num, updated_at, created_at)"
+                "VALUES (%s, %s, %s, %s, %s, %s, %s, %s);"
+                executeSQL(sql, [data[0][0],artist, album_title, song_title, track_num, datetime.now(),datetime.now()])
+
+                uppercaseArtist = artist.upper()
+
+                #move to correct folder
+                ensure_dir(library_destination + "/" + uppercaseArtist[0:1] + "/" + uppercaseArtist[0:2] + "/" + artist)
+                source_filename = os.path.normpath(path + "/" + f)
+                dest_filename = os.path.normpath(library_destination + "/" + uppercaseArtist[0:1] + "/" + uppercaseArtist[0:2] + "/" + artist + "/" + track_num + " " + artist + " - " + song_title)
+                shutil.copy2(source_filename,dest_filename)
+
+                writeLog("Copied " + source_filename + " to " + dest_filename)
+
             else:
                 #no match, move to the "potential problems folder" and log, with potential matches using fuzzy finder
-                print "No exact match found for " + song_title
+                writeLog( "No match found for " + song_title)
+
+                #move to error folder
+                ensure_dir(working_directory + "/" + errorfiles)
+                source_filename = os.path.normpath(path + "/" + f)
+                dest_filename = os.path.normpath(working_directory + "/" + errorfiles + "/" + uppercaseArtist[0:1] + "/" + uppercaseArtist[0:2] + "/" + artist + "/" + track_num + " " + artist + " - " + song_title)
+                shutil.copy2(source_filename,dest_filename)
 
 """""
 Runs the query given by sql query and the array of parameters given in params. Defaults to no parameters if none are passed
@@ -156,7 +235,7 @@ Example2:
 def executeSQL(sqlquery, params=None):
     if params is None:
         try:
-            print sqlquery
+            writeLog(sqlquery);
             db = my.connect(secrets.db_host,secrets.db_username,secrets.db_password,secrets.db_schema)
 
             cursor = db.cursor()
@@ -169,38 +248,38 @@ def executeSQL(sqlquery, params=None):
             db.close()
 
         except my.DataError as e:
-            print("DataError")
-            print(e)
+            writeLog("DataError")
+            writeLog(e)
 
         except my.InternalError as e:
-            print("InternalError")
-            print(e)
+            writeLog("InternalError")
+            writeLog(e)
 
         except my.IntegrityError as e:
-            print("IntegrityError")
-            print(e)
+            writeLog("IntegrityError")
+            writeLog(e)
 
         except my.OperationalError as e:
-            print("OperationalError")
-            print(e)
+            writeLog("OperationalError")
+            writeLog(e)
 
         except my.NotSupportedError as e:
-            print("NotSupportedError")
-            print(e)
+            writeLog("NotSupportedError")
+            writeLog(e)
 
         except my.ProgrammingError as e:
-            print("ProgrammingError")
-            print(e)
+            writeLog("ProgrammingError")
+            writeLog(e)
 
         except :
-            print("Unknown error occurred")
+            writeLog("Unknown error occurred")
     else:
-        print sqlquery
+        writeLog(sqlquery)
         if(not isinstance(params,list)):
             print("Please pass arguments as an array, ie. [param1, param2, param3, ...]")
             return False;
         paramsTuple = tuple(params);
-        print paramsTuple
+        writeLog(paramsTuple)
 
         try:
             db = my.connect(secrets.db_host,secrets.db_username,secrets.db_password,secrets.db_schema)
@@ -215,37 +294,42 @@ def executeSQL(sqlquery, params=None):
             db.close()
 
         except my.DataError as e:
-            print("DataError")
-            print(e)
+            writeLog("DataError")
+            writeLog(e)
 
         except my.InternalError as e:
-            print("InternalError")
-            print(e)
+            writeLog("InternalError")
+            writeLog(e)
 
         except my.IntegrityError as e:
-            print("IntegrityError")
-            print(e)
+            writeLog("IntegrityError")
+            writeLog(e)
 
         except my.OperationalError as e:
-            print("OperationalError")
-            print(e)
+            writeLog("OperationalError")
+            writeLog(e)
 
         except my.NotSupportedError as e:
-            print("NotSupportedError")
-            print(e)
+            writeLog("NotSupportedError")
+            writeLog(e)
 
         except my.ProgrammingError as e:
-            print("ProgrammingError")
-            print(e)
+            writeLog("ProgrammingError")
+            writeLog(e)
 
         except :
-            print("Unknown error occurred")
+            writeLog("Unknown error occurred")
 
-#helper function to ensure the working directory exists where f is the input directory
+#helper function to ensure a certain directory f exists
+#if it doesn't find it, it will make it
 def ensure_dir(f):
     d = os.path.dirname(f)
     if not os.path.exists(d):
         os.makedirs(d)
+
+#Similar helper function to above, but instead returns T/F if a file exists or not at a specified location
+def checkIfFile(fname):
+    return os.path.isfile(fname)
 
 #helper function to elicit a y/n response from the user given the question contained in the question string
 def query_yes_no(question, default="yes"):
@@ -283,11 +367,11 @@ def writeLog(instring):
     try:
         log = open( os.path.normpath( working_directory + "/" + log_file), 'a' )
     except IOError:
-        print "Error: Log File does not appear to exist or you do not have the permissions to write to it!."
+        print "Error: Log File does not appear to exist or you do not have the permissions to write to it!"
         return
     log.write( "[" + str(datetime.now()) + "]" + "    ")
-    log.write(instring + "\n")
+    log.write(str(instring) + "\n")
     log.close()
 
 if __name__ == "__main__":
-    test()
+    main()
