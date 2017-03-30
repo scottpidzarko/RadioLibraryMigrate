@@ -99,18 +99,6 @@ log_file = "libraryMigrate-log.txt"
 #regex pattern for detecting "the" at the start of a string
 reForThe = re.compile('^the', re.IGNORECASE);
 
-def test():
-    audiofile = eyed3.load('test.mp3');
-    print audiofile.tag.artist;
-    print audiofile.tag.title;
-    print audiofile.tag.track_num;
-
-    # execute SQL query using execute() method.
-    data = executeSQL("SELECT VERSION()");
-
-    writeLog("Database version : %s " % data);
-
-
 def main():
     writeLog("----------------------------------------------------------------")
     writeLog("---  Library Conversion run started at " + str(datetime.now()) + "---")
@@ -153,26 +141,23 @@ def main():
                 #if so, will use "artist, the" structure
                 artist = formatArtist(artist);
 
-                #Write to DB
-                #DB will assign song ID so we're good
-                sql = "INSERT INTO library_songs (album_id, artist, album_title, song_title, track_num, updated_at, created_at)"
-                "VALUES (%s, %s, %s, %s, %s, %s, %s, %s);"
-                executeSQL(sql, [data[0][0],artist, album_title, song_title, track_num, datetime.now(),datetime.now()])
-
-                uppercaseArtist = artist.upper()
-
                 #move to correct folder
                 ensure_dir(library_destination + "/" + uppercaseArtist[0:1] + "/" + uppercaseArtist[0:2] + "/" + artist)
                 source_filename = os.path.normpath(path + "/" + f)
-                dest_filename = os.path.normpath(library_destination + "/" + uppercaseArtist[0:1] + "/" + uppercaseArtist[0:2] + "/" + artist + "/" + album_title + "/" + track_num + " " + artist + " - " + song_title)
+                dest_filename = os.path.normpath(library_destination + "/" + formatForDoubleFilePath(artist)[0:1] + "/" +
+                 formatForDoubleFilePath(artist)[0:2] + "/" + formatFileName(artist) + "/" + formatFileName(album_title) + "/" +
+                 formatFileName(track_num + " " + artist + " - " + song_title))
                 shutil.copy2(source_filename,dest_filename)
 
                 writeLog("Copied " + source_filename + " to " + dest_filename)
 
-            elif(len(data) > 1):
-                for i in data:
-                    writeLog(i[0])
+                #Write to DB
+                #DB will assign song ID so we're good
+                sql = "INSERT INTO library_songs (album_id, artist, album_title, song_title, track_num, filelocation, updated_at, created_at)"
+                "VALUES (%s, %s, %s, %s, %s, %s, %s, %s);"
+                executeSQL(sql, [data[0][0],artist, album_title, song_title, track_num, dest_filename, datetime.now(),datetime.now()])
 
+            elif(len(data) > 1):
                 #Multiple albums with that name, try and match by artist
                 writeLog("Multiple albums found for " + album_title)
                 writeLog("Trying to match based on artist ...")
@@ -181,33 +166,51 @@ def main():
                 writeLog(data);
 
                 if(len(data) == 1):
-                    #found an exact match for artist + album title
+                    ##Found a unique match
+                    writeLog("Exact Match Found for " + song_title)
+                    writeLog(data[0][0]);
+
+                    #Determine if the artist has "the" in their name/group
+                    #if so, will use "artist, the" structure
+                    artist = formatArtist(artist);
+
+                    #move to correct folder
+                    ensure_dir(library_destination + "/" + uppercaseArtist[0:1] + "/" + uppercaseArtist[0:2] + "/" + artist)
+                    source_filename = os.path.normpath(path + "/" + f)
+                    dest_filename = os.path.normpath(library_destination + "/" + formatForDoubleFilePath(artist)[0:1] + "/" +
+                     formatForDoubleFilePath(artist)[0:2] + "/" + formatFileName(artist) + "/" + formatFileName(album_title) + "/" +
+                     formatFileName(track_num + " " + artist + " - " + song_title))
+                    shutil.copy2(source_filename,dest_filename)
+
+                    writeLog("Copied " + source_filename + " to " + dest_filename)
+
+                    #Write to DB
+                    #DB will assign song ID so we're good
+                    sql = "INSERT INTO library_songs (album_id, artist, album_title, song_title, track_num, filelocation, updated_at, created_at)"
+                    "VALUES (%s, %s, %s, %s, %s, %s, %s, %s);"
+                    executeSQL(sql, [data[0][0],artist, album_title, song_title, track_num, dest_filename, datetime.now(),datetime.now()])
+
                 elif:(len(data) > 1):
                     #found many matches again
-                    #move into "inconclusive" folder
+                    #no match, move to the "potential problems folder" and log, with potential matches using fuzzy finder
+                    writeLog( "Too many Matches found for " + song_title)
+
+                    #move to error folder
+                    ensure_dir(working_directory + "/" + errorfiles)
+                    source_filename = os.path.normpath(path + "/" + f)
+                    dest_filename = os.path.normpath(working_directory + "/" + errorfiles + "/" + uppercaseArtist[0:1] + "/" + uppercaseArtist[0:2] + "/" + artist + "/" + track_num + " " + artist + " - " + song_title)
+                    shutil.copy2(source_filename,dest_filename)
                 else:
                     #No matches found - title is matching multiple but can't find an artist name
                     #move into "inconclusive" folder
+                    #no match, move to the "potential problems folder" and log, with potential matches using fuzzy finder
+                    writeLog( "No match found for " + song_title)
 
-                ##Singled down to a single result
-
-                #if so, will use "artist, the" structure
-                if(reForThe.match(artist)):
-                    artist = artist[4:0] + ", The"
-
-                #Write to DB
-                #DB will assign song ID so we're good
-                sql = "INSERT INTO songs (album_id, artist, album_title, song_title, track_num, updated_at, created_at)"
-                "VALUES (%s, %s, %s, %s, %s, %s, %s, %s);"
-                executeSQL(sql, [data[0][0],artist, album_title, song_title, track_num, datetime.now(),datetime.now()])
-
-                #move to correct folder
-                ensure_dir(library_destination + "/" + uppercaseArtist[0:1] + "/" + uppercaseArtist[0:2] + "/" + artist)
-                source_filename = os.path.normpath(path + "/" + f)
-                dest_filename = os.path.normpath(library_destination + "/" + uppercaseArtist[0:1] + "/" + uppercaseArtist[0:2] + "/" + artist + "/" + track_num + " " + artist + " - " + song_title)
-                shutil.copy2(source_filename,dest_filename)
-
-                writeLog("Copied " + source_filename + " to " + dest_filename)
+                    #move to error folder
+                    ensure_dir(working_directory + "/" + errorfiles)
+                    source_filename = os.path.normpath(path + "/" + f)
+                    dest_filename = os.path.normpath(working_directory + "/" + errorfiles + "/" + uppercaseArtist[0:1] + "/" + uppercaseArtist[0:2] + "/" + artist + "/" + track_num + " " + artist + " - " + song_title)
+                    shutil.copy2(source_filename,dest_filename)
 
             else:
                 #no match, move to the "potential problems folder" and log, with potential matches using fuzzy finder
