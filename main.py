@@ -141,7 +141,6 @@ def main():
             writeLog("Artist: " + artist + ", Album: " + album_title + ", Title: " + song_title + ", #" + str(track_num))
 
             #try and find the albumID for the song from the library table first with an exact match and then a fuzzy finder
-            ## also wtf is the title S/T?
             sql = "SELECT id FROM library where title like %s;"
             data = executeSQL(sql, [album_title])
 
@@ -152,8 +151,7 @@ def main():
 
                 #Determine if the artist has "the" in their name/group
                 #if so, will use "artist, the" structure
-                if(reForThe.match(artist)):
-                    artist = artist[4:0] + ", The"
+                artist = formatArtist(artist);
 
                 #Write to DB
                 #DB will assign song ID so we're good
@@ -166,7 +164,7 @@ def main():
                 #move to correct folder
                 ensure_dir(library_destination + "/" + uppercaseArtist[0:1] + "/" + uppercaseArtist[0:2] + "/" + artist)
                 source_filename = os.path.normpath(path + "/" + f)
-                dest_filename = os.path.normpath(library_destination + "/" + uppercaseArtist[0:1] + "/" + uppercaseArtist[0:2] + "/" + artist + "/" + track_num + " " + artist + " - " + song_title)
+                dest_filename = os.path.normpath(library_destination + "/" + uppercaseArtist[0:1] + "/" + uppercaseArtist[0:2] + "/" + artist + "/" + album_title + "/" + track_num + " " + artist + " - " + song_title)
                 shutil.copy2(source_filename,dest_filename)
 
                 writeLog("Copied " + source_filename + " to " + dest_filename)
@@ -202,8 +200,6 @@ def main():
                 sql = "INSERT INTO songs (album_id, artist, album_title, song_title, track_num, updated_at, created_at)"
                 "VALUES (%s, %s, %s, %s, %s, %s, %s, %s);"
                 executeSQL(sql, [data[0][0],artist, album_title, song_title, track_num, datetime.now(),datetime.now()])
-
-                uppercaseArtist = artist.upper()
 
                 #move to correct folder
                 ensure_dir(library_destination + "/" + uppercaseArtist[0:1] + "/" + uppercaseArtist[0:2] + "/" + artist)
@@ -319,6 +315,40 @@ def executeSQL(sqlquery, params=None):
 
         except :
             writeLog("Unknown error occurred")
+
+#If the artist has a "The ______", change the name into "______, the"
+def formatArtist(artist):
+    if(reForThe.match(artist)):
+        artist = artist[4:] + ", The"
+    return artist
+
+# see https://stackoverflow.com/questions/62771/how-do-i-check-if-a-given-string-is-a-legal-valid-file-name-under-windows
+def formatForDoubleFilePath(s):
+    """Take a string and return a valid filename constructed from the string.
+    The strings are used only for one/two character lengths so don't have to
+    worry about DOS reserved names
+    """
+    invalid_chars = "<>:\"/\|?*"
+    filename = ''.join(c for c in s if c not in invalid_chars)
+    filename = filename.replace('.','') #no periods in the doubles as discussed
+    filename = filename.replace(',','') #no commas in the doubles as discussed
+    return filename.upper()
+
+def formatFileName(s):
+    """Take a string and return a valid filename constructed from the string.
+Uses a whitelist approach: any characters not present in valid_chars are
+removed.
+Note: this method may produce invalid filenames such as ``, `.` or `..`
+Be aware.
+
+"""
+    valid_chars = "-_()$!@#^&~`\+=[]}{'., %s%s" % (string.digits,'%')
+    filename = ''.join(c for c in s if c in valid_chars or c.isalpha())
+    badlist = CON, PRN, AUX, NUL, COM1, COM2, COM3, COM4, COM5, COM6, COM7, COM8, COM9, LPT1, LPT2, LPT3, LPT4, LPT5, LPT6, LPT7, LPT8, LPT9, nul)
+    if( filename.rsplit( ".", 1 )[ 0 ] in badlist) return "(bad filename)" + filename.rsplit( ".",1)[ 1 ]
+    if ((filename == ".......") or (filename == "dir.exe")) return "(bad filename)" + filename.rsplit( ".",1)[ 1 ]
+    #trim if it's too long
+    return textwrap.shorten(filename, width=250, placeholder="...")]
 
 #helper function to ensure a certain directory f exists
 #if it doesn't find it, it will make it
