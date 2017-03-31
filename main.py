@@ -115,6 +115,7 @@ def main():
             track_num = audiofile.tag.track_num[0];
             category = audiofile.tag.comments
             #can safely default to category 20 since that's the most common
+            ##TODO: Better regex matching here
             if(category == "category 1"):
                 category = 10
             elif(category == "category 3"):
@@ -190,7 +191,7 @@ def main():
                     "VALUES (%s, %s, %s, %s, %s, %s, %s, %s);"
                     executeSQL(sql, [data[0][0],artist, album_title, song_title, track_num, dest_filename, datetime.now(),datetime.now()])
 
-                elif:(len(data) > 1):
+                elif(len(data) > 1):
                     #found many matches again
                     #no match, move to the "potential problems folder" and log, with potential matches using fuzzy finder
                     writeLog( "Too many Matches found for " + song_title)
@@ -347,18 +348,24 @@ Be aware.
 """
     valid_chars = "-_()$!@#^&~`\+=[]}{'., %s%s" % (string.digits,'%')
     filename = ''.join(c for c in s if c in valid_chars or c.isalpha())
-    badlist = CON, PRN, AUX, NUL, COM1, COM2, COM3, COM4, COM5, COM6, COM7, COM8, COM9, LPT1, LPT2, LPT3, LPT4, LPT5, LPT6, LPT7, LPT8, LPT9, nul)
-    if( filename.rsplit( ".", 1 )[ 0 ] in badlist) return "(bad filename)" + filename.rsplit( ".",1)[ 1 ]
-    if ((filename == ".......") or (filename == "dir.exe")) return "(bad filename)" + filename.rsplit( ".",1)[ 1 ]
+    badlist = (CON, PRN, AUX, NUL, COM1, COM2, COM3, COM4, COM5, COM6, COM7, COM8, COM9, LPT1, LPT2, LPT3, LPT4, LPT5, LPT6, LPT7, LPT8, LPT9, nul)
+    if( filename.rsplit( ".", 1 )[ 0 ] in badlist):
+        return "(bad filename)" + filename.rsplit( ".",1)[ 1 ]
+    if ((filename == ".......") or (filename == "dir.exe")):
+        return "(bad filename)" + filename.rsplit( ".",1)[ 1 ]
     #trim if it's too long
-    return textwrap.shorten(filename, width=250, placeholder="...")]
+    return textwrap.shorten(filename, width=250, placeholder="...")
 
 #helper function to ensure a certain directory f exists
 #if it doesn't find it, it will make it
-def ensure_dir(f):
-    d = os.path.dirname(f)
-    if not os.path.exists(d):
-        os.makedirs(d)
+#Updated for python 3.2+
+def ensure_dir(path):
+    os.makedirs(path, exist_ok=True)
+#This is the old python 2 version
+#def ensure_dir(f):
+#    d = os.path.dirname(f)
+#    if not os.path.exists(d):
+#        os.makedirs(d)
 
 #Similar helper function to above, but instead returns T/F if a file exists or not at a specified location
 def checkIfFile(fname):
@@ -398,9 +405,14 @@ def query_yes_no(question, default="yes"):
 def writeLog(instring):
     #write that we're starting a batch job to the log file
     try:
-        log = open( os.path.normpath( working_directory + "/" + log_file), 'a' )
-    except IOError:
-        print "Error: Log File does not appear to exist or you do not have the permissions to write to it!"
+        if(checkIfFile(working_directory + "/" + log_file)):
+            log = open( os.path.normpath( working_directory + "/" + log_file), 'a' )
+        else:
+            print("Creating Log File ...")
+            ensure_dir(os.path.normpath(working_directory))
+            log = open( os.path.normpath( working_directory + "/" + log_file), 'w+' )
+    except FileNotFoundError:
+        print( "Error: Log File does not appear to exist or you do not have the permissions to write to it!" )
         return
     log.write( "[" + str(datetime.now()) + "]" + "    ")
     log.write(str(instring) + "\n")
