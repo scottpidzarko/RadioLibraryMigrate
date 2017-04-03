@@ -1,0 +1,20 @@
+db_host = "localhost"
+db_username = ""
+db_password = ""
+db_schema = ""
+
+#root folder of library to organize
+libary_basedir = ""
+
+#destination for reorganized files to go
+library_destination = ""
+
+#working_directory, where the log file is put and any other generated assets
+working_directory = ""
+
+#log file name
+#for now, we don't have the option of disabling this
+log_file = "libraryMigrate-log.txt"
+
+#error file folder name
+errorfiles = "migration_errors"

@@ -1,6 +1,7 @@
 ##Project specific gitignore
 *.mp3
 secrets.py
+config.py
 LibraryTest/*/*.mp3
 log/*
 
