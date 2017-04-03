@@ -66,6 +66,9 @@ import re
 #sring utils
 import string
 import textwrap
+#fuzzy matching
+from fuzzysearch import find_near_matches
+from fuzzywuzzy import process
 
 #Get data from config
 db_host = config.db_host
@@ -114,6 +117,14 @@ def main():
             artist = formatArtist(tagData['artist']);
             #for filepath moving - precompute
             uppercaseArtist = formatForDoubleFilePath(tagData['artist'])
+            if(album_title == artist):
+                selfTitled = 1
+            else:
+                selfTitled = 0
+            compilation = tagData['compilation']
+            length = tagData['length']
+            genre = tagData['genre']
+            year = tagData['year']
 
             writeLog("Artist: " + artist + ", Album: " + album_title + ", Title: " + song_title + ", #" + str(track_num))
 
@@ -393,7 +404,14 @@ def getMP3Data(path,f):
         pass
     except KeyError as e:
         print("File " + f + "has no language tagged")
-
+    try:
+        mood = audidofile['mood']
+        mood = mood.lower()
+    except KeyError as e:
+        writeLog("File " + f + " has no mood (ie. Cancon/Femcon/Local) tagged")
+        ret['femcon'] = 0
+        ret['cancon'] = 0
+        ret['local'] = 0
     return ret
 
 #If the artist has a "The ______", change the name into "______, the"
@@ -496,6 +514,19 @@ def writeLog(instring):
     log.write( "[" + str(datetime.now()) + "]" + "    ")
     log.write(str(instring) + "\n")
     log.close()
+
+def fuzzyContains(qs, ls, threshold):
+    '''fuzzy matches 'qs' in 'ls' and returns true if there is a match close enough
+    '''
+    for word, _ in process.extractBests(qs, (ls,), score_cutoff=threshold):
+        #print('word {}'.format(word))
+        for match in find_near_matches(qs, word, max_l_dist=1):
+            match = word[match.start:match.end]
+            #print('match {}'.format(match))
+            index = ls.find(match)
+            return True
+
+    return False
 
 if __name__ == "__main__":
     main()
