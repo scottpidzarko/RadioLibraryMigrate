@@ -5,28 +5,7 @@
 ###########################
 
 ##Example ID3 library usage
-## install with pip install eyed3
-## Use python 2.7.X
-## Documentation at: http://eyed3.nicfit.net/#documentation-index
-#
-#import eyed3
-#
-##Setting a tag
-#
-#audiofile = eyed3.load("song.mp3")
-#audiofile.tag.artist = u"Nobunny"
-#audiofile.tag.album = u"Love Visions"
-#audiofile.tag.album_artist = u"Various Artists"
-#audiofile.tag.title = u"I Am a Girlfriend"
-#audiofile.tag.track_num = 4
-#audiofile.tag.save()
-#
-##Getting a tag
-##audiofile = eyed3.load("song.mp3")
-#print audiofile.tag.artist;
-#print audiofile.tag.title;
-#print audiofile.tag.track_num;
-#etc
+#TODO
 
 ##Example MySQLdb usage:
 ##Install with pip install MySQL-python
@@ -71,7 +50,7 @@ import os
 import os.path
 import shutil
 ##For MP3 ID3 tags
-import eyed3
+#from mutagen.mp3 import EasyMP3 as MP3
 ##for mysql database acces
 import MySQLdb as my
 ##For fuzzy string finder
@@ -108,12 +87,12 @@ def main():
         writeLog("Going into " + path)
         for f in files:
             writeLog("Processing: \"" + f + "\"");
-            audiofile=eyed3.load(os.path.normpath(path + "/" + f));
-            artist =  audiofile.tag.artist;
-            album_title =  audiofile.tag.album;
-            song_title = audiofile.tag.title;
-            track_num = audiofile.tag.track_num[0];
-            category = audiofile.tag.comments
+            audiofile=MP3(os.path.normpath(path + "/" + f));
+            artist =  audiofile['artist'];
+            album_title =  audiofile['album'];
+            song_title = audiofile.tag['title'];
+            track_num = audiofile['track_num'];
+            category = audiofile['comments']
             #can safely default to category 20 since that's the most common
             ##TODO: Better regex matching here
             if(category == "category 1"):
