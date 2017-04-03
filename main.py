@@ -103,6 +103,7 @@ def main():
             tagData = getMP3Data(path,f)
             if(not tagData):
                 continue
+            print(tagData)
 
             album_title = tagData['album_title']
             song_title = tagData['song_title']
@@ -316,7 +317,6 @@ def getMP3Data(path,f):
     ret = {}
     try:
         audiofile = eMP3(os.path.normpath(path + "/" + f));
-        print(audiofile)
     except mutagen.mp3.HeaderNotFoundError as e:
         writeLog("HeaderNotFoundError")
         writeLog(e)
@@ -324,20 +324,28 @@ def getMP3Data(path,f):
     try:
         ret['artist'] = audiofile['artist'][0]
     except KeyError as e:
-        print("File " + f + " has no artist tagged")
+        writeLog("File " + f + " has no artist tagged")
+        ret[artist] = ""
+    try:
+        ret['albumartist'] = audiofile['albumartist'][0]
+    except KeyError as e:
+        writeLog("File " + f + " has no albumartist tagged")
+        ret['albumartist'] = ""
     try:
         ret['album_title'] = audiofile['album'][0];
     except KeyError as e:
-        print("File " + f + " has no album title tagged")
+        writeLog("File " + f + " has no album title tagged")
+        ret['album_title'] = ""
     try:
         ret['song_title'] = audiofile['title'][0]
     except KeyError as e:
-        print("File " + f + " has no song tagged")
+        writeLog("File " + f + " has no song tagged")
+        ret['song_title'] = ""
     try:
         ret['track_num'] = audiofile['tracknumber'][0];
     except KeyError as e:
         ret['track_num'] = None
-        #print("File " + f + " has no tracknumber tagged")
+        writeLog("File " + f + " has no tracknumber tagged")
     temp = MP3(os.path.normpath(path + "/" + f))
     try:
         category = ""#temp["COMM:0:'eng'"]
@@ -354,31 +362,31 @@ def getMP3Data(path,f):
         else:
             ret['category'] = 20
     except KeyError as e:
-        #print("File " + f + " has no crtc category tagged")
+        writeLog("File " + f + " has no crtc category tagged")
         ret['category'] = None
     try:
-        ret['year'] = audiofile['date'];
+        ret['year'] = audiofile['date'][0];
     except KeyError as e:
-        #print("File " + f + " has no year tagged")
+        writeLog("File " + f + " has no year tagged")
         ret['year'] = None
     try:
-        #ret['length'] = audiofile['length']
-        pass
+        ret['length'] = audiofile['length'][0]
     except KeyError as e:
-        print("File " + f + " has no length tagged")
+        writeLog("File " + f + " has no length tagged")
+        ret['length'] = None
     try:
-        ret['compilation'] = audiofile['compilation']
+        ret['compilation'] = audiofile['compilation'][0]
         if(ret['compilation'] == 1):
             ret['compilation'] = 1
         else:
             ret['compilation'] = 0
     except KeyError as e:
-        compilation = 0
+        ret['compilation'] = 0
         #print("File " + f + " has no comp flag tagged")
     try:
-        ret['genre'] = audiofile['genre']
+        ret['genre'] = audiofile['genre'][0]
     except KeyError as e:
-        #print("File " + f + " has no genre tagged")
+        writeLog("File " + f + " has no genre tagged")
         ret['genre'] = None
     try:
         #ret['language'] = audiofile['language']
