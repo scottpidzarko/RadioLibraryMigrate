@@ -57,33 +57,14 @@ import MySQLdb as my
 ##For fuzzy string finder
 ## Install with pip install fuzzywuzzy[speedup]
 #Load db credentials from here
-import secrets
+import config
 #To get the current datetime
 from datetime import datetime
 #for regular expressions
 import re
 
-#root folder of library to organize
-libary_basedir = "/home/scott/git/RadioLibraryMigrate/LibraryTest"
-
-#destination for reorganized files to go
-library_destination = "/home/scott/Music/Test/"
-
-#working_directory, where the log file is put and any other generated assets
-working_directory = "/home/scott/git/RadioLibraryMigrate/log"
-
-#log file name
-#for now, we don't have the option of disabling this
-log_file = "libraryMigrate-log.txt"
-
-#error file folder name
-errorfiles = "migration_errors"
-
 #regex pattern for detecting "the" at the start of a string
 reForThe = re.compile('^the', re.IGNORECASE);
-
-
-
 
 def main():
     if(sys.argv[0] == "--dry-run"):
