@@ -50,6 +50,7 @@ import os
 import os.path
 import shutil
 ##For MP3 ID3 tags
+import mutagen
 from mutagen.mp3 import EasyMP3 as eMP3
 from mutagen.mp3 import MP3 as MP3
 ##for mysql database acces
@@ -62,16 +63,32 @@ import config
 from datetime import datetime
 #for regular expressions
 import re
+#sring utils
+import string
+import textwrap
+
+#Get data from config
+db_host = config.db_host
+db_username = config.db_username
+db_password = config.db_password
+db_schema = config.db_schema
+
+libary_basedir = config.libary_basedir
+library_destination = config.library_destination
+working_directory = config.working_directory
+log_file = config.log_file
+errorfiles = config.errorfile
 
 #regex pattern for detecting "the" at the start of a string
 reForThe = re.compile('^the', re.IGNORECASE);
 
 def main():
+    dryRun = False
     if(sys.argv[0] == "--dry-run"):
         dryRun = True
     else:
         if( not query_yes_no("This is a *live* run. Are you sure?", "no")):
-            print "Aborting ..."
+            print( "Aborting ..." )
             return
 
     writeLog("----------------------------------------------------------------")
@@ -82,17 +99,22 @@ def main():
         writeLog("Going into " + path)
         for f in files:
             writeLog("Processing: \"" + f + "\"");
-            audiofile = eMP3(os.path.normpath(path + "/" + f));
+            try:
+                audiofile = eMP3(os.path.normpath(path + "/" + f));
+            except mutagen.mp3.HeaderNotFoundError as e:
+                writeLog("HeaderNotFoundError")
+                writeLog(e)
+                continue
             artist =  audiofile['artist'][0];
-            print artist
+            print( artist )
             album_title =  audiofile['album'][0];
-            print album_title
+            print( album_title )
             song_title = audiofile['title'][0];
-            print song_title
+            print( song_title )
             track_num = audiofile['tracknumber'][0];
-            print track_num
+            print( track_num )
             temp = MP3(os.path.normpath(path + "/" + f))
-            temp.keys()
+
             category = ""#temp["COMM:0:'eng'"]
             #can safely default to category 20 since that's the most common
             ##TODO: Better regex matching here
@@ -106,7 +128,7 @@ def main():
                 category = 50
             else:
                 category = 20
-            date = audiofile['date'];
+            #date = audiofile['date'];
             #length = audiofile['length']
             #compilation = audiofile['compilation']
             #genre = audiofile['genre']
@@ -124,20 +146,20 @@ def main():
             #try and find the albumID for the song from the library table first with an exact match and then a fuzzy finder
             sql = "SELECT id FROM library where title like %s;"
             data = executeSQL(sql, [album_title])
+            print(data)
 
             if(len(data) == 1):
                 #Found a unique match
                 writeLog("Exact Match Found for " + song_title)
                 writeLog(data[0][0]);
 
-
                 #move to correct folder
-                ensure_dir(library_destination + "/" + uppercaseArtist[0:1] + "/" + uppercaseArtist[0:2] + "/" + artist)
                 source_filename = os.path.normpath(path + "/" + f)
                 dest_filename = os.path.normpath(library_destination + "/" + uppercaseArtist[0:1] + "/" +
                  uppercaseArtist[0:2] + "/" + formatFileName(artist) + "/" + formatFileName(album_title) + "/" +
                  formatFileName(track_num + " " + artist + " - " + song_title))
-                if(dryRun == True):
+                ensure_dir(os.path.dirname(dest_filename))
+                if(not dryRun):
                     shutil.copy2(source_filename,dest_filename)
 
                 writeLog("Copied " + source_filename + " to " + dest_filename)
@@ -146,7 +168,7 @@ def main():
                 #DB will assign song ID so we're good
                 sql = "INSERT INTO library_songs (album_id, artist, album_title, song_title, track_num, filelocation, updated_at, created_at)"
                 "VALUES (%s, %s, %s, %s, %s, %s, %s, %s);"
-                if(dryRun == True):
+                if(not dryRun):
                     executeSQL(sql, [data[0][0],artist, album_title, song_title, track_num, dest_filename, datetime.now(),datetime.now()])
 
             elif(len(data) > 1):
@@ -163,12 +185,12 @@ def main():
                     writeLog(data[0][0]);
 
                     #move to correct folder
-                    ensure_dir(library_destination + "/" + uppercaseArtist[0:1] + "/" + uppercaseArtist[0:2] + "/" + artist)
                     source_filename = os.path.normpath(path + "/" + f)
                     dest_filename = os.path.normpath(library_destination + "/" + uppercaseArtist[0:1] + "/" +
                      uppercaseArtist[0:2] + "/" + formatFileName(artist) + "/" + formatFileName(album_title) + "/" +
                      formatFileName(track_num + " " + artist + " - " + song_title))
-                    if(dryRun == True):
+                    ensure_dir(os.path.dirname(dest_filename))
+                    if(not dryRun):
                         shutil.copy2(source_filename,dest_filename)
 
                     writeLog("Copied " + source_filename + " to " + dest_filename)
@@ -177,7 +199,7 @@ def main():
                     #DB will assign song ID so we're good
                     sql = "INSERT INTO library_songs (album_id, artist, album_title, song_title, track_num, filelocation, updated_at, created_at)"
                     "VALUES (%s, %s, %s, %s, %s, %s, %s, %s);"
-                    if(dryRun == True):
+                    if(not dryRun):
                         executeSQL(sql, [data[0][0],artist, album_title, song_title, track_num, dest_filename, datetime.now(),datetime.now()])
 
                 elif(len(data) > 1):
@@ -186,10 +208,11 @@ def main():
                     writeLog( "Too many Matches found for " + song_title)
 
                     #move to error folder
-                    ensure_dir(working_directory + "/" + errorfiles)
                     source_filename = os.path.normpath(path + "/" + f)
-                    dest_filename = os.path.normpath(working_directory + "/" + errorfiles + "/" + uppercaseArtist[0:1] + "/" + uppercaseArtist[0:2] + "/" + artist + "/" + track_num + " " + artist + " - " + song_title)
-                    if(dryRun == True):
+                    dest_filename = os.path.normpath(working_directory + "/" + errorfiles + "/" + uppercaseArtist[0:1] + "/" +
+					 uppercaseArtist[0:2] + "/" + artist + "/" + track_num + " " + artist + " - " + song_title)
+                    ensure_dir(os.path.dirname(dest_filename))
+                    if(not dryRun):
                         shutil.copy2(source_filename,dest_filename)
                 else:
                     #No matches found - title is matching multiple but can't find an artist name
@@ -198,10 +221,11 @@ def main():
                     writeLog( "No match found for " + song_title)
 
                     #move to error folder
-                    ensure_dir(working_directory + "/" + errorfiles)
                     source_filename = os.path.normpath(path + "/" + f)
-                    dest_filename = os.path.normpath(working_directory + "/" + errorfiles + "/" + uppercaseArtist[0:1] + "/" + uppercaseArtist[0:2] + "/" + artist + "/" + track_num + " " + artist + " - " + song_title)
-                    if(dryRun == True):
+                    dest_filename = os.path.normpath(working_directory + "/" + errorfiles + "/" + uppercaseArtist[0:1] + "/"
+					 + uppercaseArtist[0:2] + "/" + artist + "/" + track_num + " " + artist + " - " + song_title)
+                    ensure_dir(os.path.dirname(dest_filename))
+                    if(not dryRun):
                         shutil.copy2(source_filename,dest_filename)
 
             else:
@@ -209,10 +233,12 @@ def main():
                 writeLog( "No match found for " + song_title)
 
                 #move to error folder
-                ensure_dir(working_directory + "/" + errorfiles)
+
                 source_filename = os.path.normpath(path + "/" + f)
-                dest_filename = os.path.normpath(working_directory + "/" + errorfiles + "/" + uppercaseArtist[0:1] + "/" + uppercaseArtist[0:2] + "/" + artist + "/" + track_num + " " + artist + " - " + song_title)
-                if(dryRun == True):
+                dest_filename = os.path.normpath(working_directory + "/" + errorfiles + "/" + uppercaseArtist[0:1]
+				 + "/" + uppercaseArtist[0:2] + "/" + artist + "/" + track_num + " " + artist + " - " + song_title)
+                ensure_dir(os.path.dirname(dest_filename))
+                if(not dryRun):
                     shutil.copy2(source_filename,dest_filename)
 
 """""
@@ -228,7 +254,7 @@ def executeSQL(sqlquery, params=None):
     if params is None:
         try:
             writeLog(sqlquery);
-            db = my.connect(secrets.db_host,secrets.db_username,secrets.db_password,secrets.db_schema)
+            db = my.connect(db_host,db_username,db_password,db_schema)
 
             cursor = db.cursor()
 
@@ -274,7 +300,7 @@ def executeSQL(sqlquery, params=None):
         writeLog(paramsTuple)
 
         try:
-            db = my.connect(secrets.db_host,secrets.db_username,secrets.db_password,secrets.db_schema)
+            db = my.connect(db_host,db_username,db_password,db_schema)
 
             cursor = db.cursor()
 
@@ -340,7 +366,9 @@ Be aware.
 """
     valid_chars = "-_()$!@#^&~`\+=[]}{'., %s%s" % (string.digits,'%')
     filename = ''.join(c for c in s if c in valid_chars or c.isalpha())
-    badlist = (CON, PRN, AUX, NUL, COM1, COM2, COM3, COM4, COM5, COM6, COM7, COM8, COM9, LPT1, LPT2, LPT3, LPT4, LPT5, LPT6, LPT7, LPT8, LPT9, nul)
+    badlist = ("CON", "PRN", "AUX", "NUL", "COM1", "COM2", "COM3", "COM4", "COM5",
+	 "COM6", "COM7", "COM8", "COM9", "LPT1", "LPT2", "LPT3", "LPT4", "LPT5",
+	 "LPT6", "LPT7", "LPT8", "LPT9", "nul")
     if( filename.rsplit( ".", 1 )[ 0 ] in badlist):
         return "(bad filename)" + filename.rsplit( ".",1)[ 1 ]
     if ((filename == ".......") or (filename == "dir.exe")):
