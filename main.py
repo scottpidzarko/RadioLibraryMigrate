@@ -50,7 +50,8 @@ import os
 import os.path
 import shutil
 ##For MP3 ID3 tags
-#from mutagen.mp3 import EasyMP3 as MP3
+from mutagen.mp3 import EasyMP3 as eMP3
+from mutagen.mp3 import MP3 as MP3
 ##for mysql database acces
 import MySQLdb as my
 ##For fuzzy string finder
@@ -75,10 +76,23 @@ working_directory = "/home/scott/git/RadioLibraryMigrate/log"
 #for now, we don't have the option of disabling this
 log_file = "libraryMigrate-log.txt"
 
+#error file folder name
+errorfiles = "migration_errors"
+
 #regex pattern for detecting "the" at the start of a string
 reForThe = re.compile('^the', re.IGNORECASE);
 
+
+
+
 def main():
+    if(sys.argv[0] == "--dry-run"):
+        dryRun = True
+    else:
+        if( not query_yes_no("This is a *live* run. Are you sure?", "no")):
+            print "Aborting ..."
+            return
+
     writeLog("----------------------------------------------------------------")
     writeLog("---  Library Conversion run started at " + str(datetime.now()) + "---")
     writeLog("----------------------------------------------------------------")
@@ -87,12 +101,18 @@ def main():
         writeLog("Going into " + path)
         for f in files:
             writeLog("Processing: \"" + f + "\"");
-            audiofile=MP3(os.path.normpath(path + "/" + f));
-            artist =  audiofile['artist'];
-            album_title =  audiofile['album'];
-            song_title = audiofile.tag['title'];
-            track_num = audiofile['track_num'];
-            category = audiofile['comments']
+            audiofile = eMP3(os.path.normpath(path + "/" + f));
+            artist =  audiofile['artist'][0];
+            print artist
+            album_title =  audiofile['album'][0];
+            print album_title
+            song_title = audiofile['title'][0];
+            print song_title
+            track_num = audiofile['tracknumber'][0];
+            print track_num
+            temp = MP3(os.path.normpath(path + "/" + f))
+            temp.keys()
+            category = ""#temp["COMM:0:'eng'"]
             #can safely default to category 20 since that's the most common
             ##TODO: Better regex matching here
             if(category == "category 1"):
@@ -105,6 +125,18 @@ def main():
                 category = 50
             else:
                 category = 20
+            date = audiofile['date'];
+            #length = audiofile['length']
+            #compilation = audiofile['compilation']
+            #genre = audiofile['genre']
+            #language = audiofile['language']
+
+            #Determine if the artist has "the" in their name/group
+            #if so, will use "artist, the" structure
+            artist = formatArtist(artist);
+            #for filepath moving - precompute
+            uppercaseArtist = formatForDoubleFilePath(artist)
+
 
             writeLog("Artist: " + artist + ", Album: " + album_title + ", Title: " + song_title + ", #" + str(track_num))
 
@@ -117,17 +149,15 @@ def main():
                 writeLog("Exact Match Found for " + song_title)
                 writeLog(data[0][0]);
 
-                #Determine if the artist has "the" in their name/group
-                #if so, will use "artist, the" structure
-                artist = formatArtist(artist);
 
                 #move to correct folder
                 ensure_dir(library_destination + "/" + uppercaseArtist[0:1] + "/" + uppercaseArtist[0:2] + "/" + artist)
                 source_filename = os.path.normpath(path + "/" + f)
-                dest_filename = os.path.normpath(library_destination + "/" + formatForDoubleFilePath(artist)[0:1] + "/" +
-                 formatForDoubleFilePath(artist)[0:2] + "/" + formatFileName(artist) + "/" + formatFileName(album_title) + "/" +
+                dest_filename = os.path.normpath(library_destination + "/" + uppercaseArtist[0:1] + "/" +
+                 uppercaseArtist[0:2] + "/" + formatFileName(artist) + "/" + formatFileName(album_title) + "/" +
                  formatFileName(track_num + " " + artist + " - " + song_title))
-                shutil.copy2(source_filename,dest_filename)
+                if(dryRun == True):
+                    shutil.copy2(source_filename,dest_filename)
 
                 writeLog("Copied " + source_filename + " to " + dest_filename)
 
@@ -135,7 +165,8 @@ def main():
                 #DB will assign song ID so we're good
                 sql = "INSERT INTO library_songs (album_id, artist, album_title, song_title, track_num, filelocation, updated_at, created_at)"
                 "VALUES (%s, %s, %s, %s, %s, %s, %s, %s);"
-                executeSQL(sql, [data[0][0],artist, album_title, song_title, track_num, dest_filename, datetime.now(),datetime.now()])
+                if(dryRun == True):
+                    executeSQL(sql, [data[0][0],artist, album_title, song_title, track_num, dest_filename, datetime.now(),datetime.now()])
 
             elif(len(data) > 1):
                 #Multiple albums with that name, try and match by artist
@@ -150,17 +181,14 @@ def main():
                     writeLog("Exact Match Found for " + song_title)
                     writeLog(data[0][0]);
 
-                    #Determine if the artist has "the" in their name/group
-                    #if so, will use "artist, the" structure
-                    artist = formatArtist(artist);
-
                     #move to correct folder
                     ensure_dir(library_destination + "/" + uppercaseArtist[0:1] + "/" + uppercaseArtist[0:2] + "/" + artist)
                     source_filename = os.path.normpath(path + "/" + f)
-                    dest_filename = os.path.normpath(library_destination + "/" + formatForDoubleFilePath(artist)[0:1] + "/" +
-                     formatForDoubleFilePath(artist)[0:2] + "/" + formatFileName(artist) + "/" + formatFileName(album_title) + "/" +
+                    dest_filename = os.path.normpath(library_destination + "/" + uppercaseArtist[0:1] + "/" +
+                     uppercaseArtist[0:2] + "/" + formatFileName(artist) + "/" + formatFileName(album_title) + "/" +
                      formatFileName(track_num + " " + artist + " - " + song_title))
-                    shutil.copy2(source_filename,dest_filename)
+                    if(dryRun == True):
+                        shutil.copy2(source_filename,dest_filename)
 
                     writeLog("Copied " + source_filename + " to " + dest_filename)
 
@@ -168,7 +196,8 @@ def main():
                     #DB will assign song ID so we're good
                     sql = "INSERT INTO library_songs (album_id, artist, album_title, song_title, track_num, filelocation, updated_at, created_at)"
                     "VALUES (%s, %s, %s, %s, %s, %s, %s, %s);"
-                    executeSQL(sql, [data[0][0],artist, album_title, song_title, track_num, dest_filename, datetime.now(),datetime.now()])
+                    if(dryRun == True):
+                        executeSQL(sql, [data[0][0],artist, album_title, song_title, track_num, dest_filename, datetime.now(),datetime.now()])
 
                 elif(len(data) > 1):
                     #found many matches again
@@ -179,7 +208,8 @@ def main():
                     ensure_dir(working_directory + "/" + errorfiles)
                     source_filename = os.path.normpath(path + "/" + f)
                     dest_filename = os.path.normpath(working_directory + "/" + errorfiles + "/" + uppercaseArtist[0:1] + "/" + uppercaseArtist[0:2] + "/" + artist + "/" + track_num + " " + artist + " - " + song_title)
-                    shutil.copy2(source_filename,dest_filename)
+                    if(dryRun == True):
+                        shutil.copy2(source_filename,dest_filename)
                 else:
                     #No matches found - title is matching multiple but can't find an artist name
                     #move into "inconclusive" folder
@@ -190,7 +220,8 @@ def main():
                     ensure_dir(working_directory + "/" + errorfiles)
                     source_filename = os.path.normpath(path + "/" + f)
                     dest_filename = os.path.normpath(working_directory + "/" + errorfiles + "/" + uppercaseArtist[0:1] + "/" + uppercaseArtist[0:2] + "/" + artist + "/" + track_num + " " + artist + " - " + song_title)
-                    shutil.copy2(source_filename,dest_filename)
+                    if(dryRun == True):
+                        shutil.copy2(source_filename,dest_filename)
 
             else:
                 #no match, move to the "potential problems folder" and log, with potential matches using fuzzy finder
@@ -200,7 +231,8 @@ def main():
                 ensure_dir(working_directory + "/" + errorfiles)
                 source_filename = os.path.normpath(path + "/" + f)
                 dest_filename = os.path.normpath(working_directory + "/" + errorfiles + "/" + uppercaseArtist[0:1] + "/" + uppercaseArtist[0:2] + "/" + artist + "/" + track_num + " " + artist + " - " + song_title)
-                shutil.copy2(source_filename,dest_filename)
+                if(dryRun == True):
+                    shutil.copy2(source_filename,dest_filename)
 
 """""
 Runs the query given by sql query and the array of parameters given in params. Defaults to no parameters if none are passed
@@ -342,15 +374,16 @@ def ensure_dir(path):
     os.makedirs(path, exist_ok=True)
 #This is the old python 2 version
 #def ensure_dir(f):
-#    d = os.path.dirname(f)
+#   d = os.path.dirname(f)
 #    if not os.path.exists(d):
-#        os.makedirs(d)
+#       os.makedirs(d)
 
 #Similar helper function to above, but instead returns T/F if a file exists or not at a specified location
 def checkIfFile(fname):
     return os.path.isfile(fname)
 
 #helper function to elicit a y/n response from the user given the question contained in the question string
+#Python 3+
 def query_yes_no(question, default="yes"):
     """Ask a yes/no question via raw_input() and return their answer.
     "question" is a string that is presented to the user.
