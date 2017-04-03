@@ -84,7 +84,7 @@ reForThe = re.compile('^the', re.IGNORECASE);
 
 def main():
     dryRun = False
-    if(sys.argv[0] == "--dry-run"):
+    if(len(sys.argv) > 1 and (sys.argv[1] == "--dry-run" or sys.argv[2] == "--dry-run")):
         dryRun = True
     else:
         if( not query_yes_no("This is a *live* run. Are you sure?", "no")):
@@ -99,47 +99,20 @@ def main():
         writeLog("Going into " + path)
         for f in files:
             writeLog("Processing: \"" + f + "\"");
-            try:
-                audiofile = eMP3(os.path.normpath(path + "/" + f));
-            except mutagen.mp3.HeaderNotFoundError as e:
-                writeLog("HeaderNotFoundError")
-                writeLog(e)
+
+            tagData = getMP3Data(path,f)
+            if(not tagData):
                 continue
-            artist =  audiofile['artist'][0];
-            print( artist )
-            album_title =  audiofile['album'][0];
-            print( album_title )
-            song_title = audiofile['title'][0];
-            print( song_title )
-            track_num = audiofile['tracknumber'][0];
-            print( track_num )
-            temp = MP3(os.path.normpath(path + "/" + f))
 
-            category = ""#temp["COMM:0:'eng'"]
-            #can safely default to category 20 since that's the most common
-            ##TODO: Better regex matching here
-            if(category == "category 1"):
-                category = 10
-            elif(category == "category 3"):
-                category = 30
-            elif(category == "category 4"):
-                category = 40
-            elif(category == "category 5"):
-                category = 50
-            else:
-                category = 20
-            #date = audiofile['date'];
-            #length = audiofile['length']
-            #compilation = audiofile['compilation']
-            #genre = audiofile['genre']
-            #language = audiofile['language']
-
+            album_title = tagData['album_title']
+            song_title = tagData['song_title']
+            track_num = tagData['track_num']
+            category = tagData['category']
             #Determine if the artist has "the" in their name/group
             #if so, will use "artist, the" structure
-            artist = formatArtist(artist);
+            artist = formatArtist(tagData['artist']);
             #for filepath moving - precompute
-            uppercaseArtist = formatForDoubleFilePath(artist)
-
+            uppercaseArtist = formatForDoubleFilePath(tagData['artist'])
 
             writeLog("Artist: " + artist + ", Album: " + album_title + ", Title: " + song_title + ", #" + str(track_num))
 
@@ -166,10 +139,10 @@ def main():
 
                 #Write to DB
                 #DB will assign song ID so we're good
-                sql = "INSERT INTO library_songs (album_id, artist, album_title, song_title, track_num, filelocation, updated_at, created_at)"
-                "VALUES (%s, %s, %s, %s, %s, %s, %s, %s);"
+                sql = "INSERT INTO library_songs (library_id, artist, album_title, song_title, track_num, tracks_total, file_location, updated_at, created_at) " + \
+                "VALUES (%s, %s, %s, %s, %s, %s, %s, NOW(), NOW());"
                 if(not dryRun):
-                    executeSQL(sql, [data[0][0],artist, album_title, song_title, track_num, dest_filename, datetime.now(),datetime.now()])
+                    executeSQL(sql, [data[0][0],artist, album_title, song_title, track_num[0], track_num[2:], dest_filename])
 
             elif(len(data) > 1):
                 #Multiple albums with that name, try and match by artist
@@ -197,10 +170,10 @@ def main():
 
                     #Write to DB
                     #DB will assign song ID so we're good
-                    sql = "INSERT INTO library_songs (album_id, artist, album_title, song_title, track_num, filelocation, updated_at, created_at)"
-                    "VALUES (%s, %s, %s, %s, %s, %s, %s, %s);"
+                    sql = "INSERT INTO library_songs (library_id, artist, album_title, song_title, track_num, file_location, updated_at, created_at)"
+                    "VALUES (%s, %s, %s, %s, %s, %s, NOW(), NOW());"
                     if(not dryRun):
-                        executeSQL(sql, [data[0][0],artist, album_title, song_title, track_num, dest_filename, datetime.now(),datetime.now()])
+                        executeSQL(sql, [data[0][0],artist, album_title, song_title, track_num, dest_filenam])
 
                 elif(len(data) > 1):
                     #found many matches again
@@ -253,17 +226,18 @@ Example2:
 def executeSQL(sqlquery, params=None):
     if params is None:
         try:
-            writeLog(sqlquery);
+            writeLog("Executing the following SQL Query: " + sqlquery);
             db = my.connect(db_host,db_username,db_password,db_schema)
 
             cursor = db.cursor()
 
             cursor.execute(sqlquery)
 
+            db.commit()
+            db.close()
+
             #https://stackoverflow.com/questions/17861152/cursor-fetchall-vs-listcursor-in-python
             return list(cursor)
-
-            db.close()
 
         except my.DataError as e:
             writeLog("DataError")
@@ -292,12 +266,11 @@ def executeSQL(sqlquery, params=None):
         except :
             writeLog("Unknown error occurred")
     else:
-        writeLog(sqlquery)
+        writeLog("Executing the folowing SQL Query: " + sqlquery)
         if(not isinstance(params,list)):
             print("Please pass arguments as an array, ie. [param1, param2, param3, ...]")
             return False;
         paramsTuple = tuple(params);
-        writeLog(paramsTuple)
 
         try:
             db = my.connect(db_host,db_username,db_password,db_schema)
@@ -306,10 +279,11 @@ def executeSQL(sqlquery, params=None):
 
             cursor.execute(sqlquery, paramsTuple)
 
+            db.commit()
+            db.close()
+
             #https://stackoverflow.com/questions/17861152/cursor-fetchall-vs-listcursor-in-python
             return list(cursor)
-
-            db.close()
 
         except my.DataError as e:
             writeLog("DataError")
@@ -337,6 +311,82 @@ def executeSQL(sqlquery, params=None):
 
         except :
             writeLog("Unknown error occurred")
+
+def getMP3Data(path,f):
+    ret = {}
+    try:
+        audiofile = eMP3(os.path.normpath(path + "/" + f));
+        print(audiofile)
+    except mutagen.mp3.HeaderNotFoundError as e:
+        writeLog("HeaderNotFoundError")
+        writeLog(e)
+        return False
+    try:
+        ret['artist'] = audiofile['artist'][0]
+    except KeyError as e:
+        print("File " + f + " has no artist tagged")
+    try:
+        ret['album_title'] = audiofile['album'][0];
+    except KeyError as e:
+        print("File " + f + " has no album title tagged")
+    try:
+        ret['song_title'] = audiofile['title'][0]
+    except KeyError as e:
+        print("File " + f + " has no song tagged")
+    try:
+        ret['track_num'] = audiofile['tracknumber'][0];
+    except KeyError as e:
+        ret['track_num'] = None
+        #print("File " + f + " has no tracknumber tagged")
+    temp = MP3(os.path.normpath(path + "/" + f))
+    try:
+        category = ""#temp["COMM:0:'eng'"]
+        #can safely default to category 20 since that's the most common
+        ##TODO: Better regex matching here
+        if(category == "category 1"):
+            ret['category'] = 10
+        elif(category == "category 3"):
+            ret['category'] = 30
+        elif(category == "category 4"):
+            ret['category'] = 40
+        elif(category == "category 5"):
+            ret['category'] = 50
+        else:
+            ret['category'] = 20
+    except KeyError as e:
+        #print("File " + f + " has no crtc category tagged")
+        ret['category'] = None
+    try:
+        ret['year'] = audiofile['date'];
+    except KeyError as e:
+        #print("File " + f + " has no year tagged")
+        ret['year'] = None
+    try:
+        #ret['length'] = audiofile['length']
+        pass
+    except KeyError as e:
+        print("File " + f + " has no length tagged")
+    try:
+        ret['compilation'] = audiofile['compilation']
+        if(ret['compilation'] == 1):
+            ret['compilation'] = 1
+        else:
+            ret['compilation'] = 0
+    except KeyError as e:
+        compilation = 0
+        #print("File " + f + " has no comp flag tagged")
+    try:
+        ret['genre'] = audiofile['genre']
+    except KeyError as e:
+        #print("File " + f + " has no genre tagged")
+        ret['genre'] = None
+    try:
+        #ret['language'] = audiofile['language']
+        pass
+    except KeyError as e:
+        print("File " + f + "has no language tagged")
+
+    return ret
 
 #If the artist has a "The ______", change the name into "______, the"
 def formatArtist(artist):

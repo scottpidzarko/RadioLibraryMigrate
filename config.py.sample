@@ -17,4 +17,4 @@ working_directory = ""
 log_file = "libraryMigrate-log.txt"
 
 #error file folder name
-errorfiles = "migration_errors"
+errorfile = "migration_errors"
