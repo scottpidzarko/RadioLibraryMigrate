@@ -112,6 +112,7 @@ def main():
             song_title = tagData['song_title']
             track_num = tagData['track_num']
             category = tagData['category']
+            albumartist = tagData['albumartist']
             #Determine if the artist has "the" in their name/group
             #if so, will use "artist, the" structure
             artist = formatArtist(tagData['artist']);
@@ -161,7 +162,10 @@ def main():
                 writeLog("Multiple albums found for " + album_title)
                 writeLog("Trying to match based on artist ...")
                 sql = "SELECT %s FROM library where title like %s and artist like %s;"
-                data = executeSQL(sql, ["id",album_title,artist])
+                if(not albumartist)
+                    data = executeSQL(sql, ["id",album_title,artist])
+                else:
+                    data = executeSQL(sql, ["id",album_title,albumartist])
                 writeLog(data);
 
                 if(len(data) == 1):
@@ -320,7 +324,6 @@ def executeSQL(sqlquery, params=None):
         except my.ProgrammingError as e:
             writeLog("ProgrammingError")
             writeLog(e)
-
         except :
             writeLog("Unknown error occurred")
 
