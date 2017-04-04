@@ -120,7 +120,7 @@ def main():
             uppercaseArtist = formatForDoubleFilePath(tagData['artist'])
             if(album_title == artist):
                 selfTitled = 1
-            elif(album_title == albumartist)
+            elif(album_title == albumartist):
                 selfTitled = 1
             else:
                 selfTitled = 0
@@ -154,10 +154,10 @@ def main():
 
                 #Write to DB
                 #DB will assign song ID so we're good
-                sql = "INSERT INTO library_songs (library_id, artist, album_title, song_title, track_num, file_location, updated_at, created_at) " + \
-                "VALUES (%s, %s, %s, %s, %s, %s, %s, NOW(), NOW());"
+                sql = "INSERT INTO library_songs (library_id, artist, album_artist, album_title, song_title, track_num, genre, compilation, crtc, year, length, file_location, updated_at, created_at) " + \
+                "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW(), NOW());"
                 if(not dryRun):
-                    executeSQL(sql, [data[0][0],artist, album_title, song_title, track_num[0], dest_filename])
+                    executeSQL(sql, [data[0][0],artist, albumartist, album_title, song_title, track_num[0], genre, compilation, category, year, length, dest_filename])
 
             elif(len(data) > 1):
                 #Multiple albums with that name, try and match by artist
@@ -188,10 +188,10 @@ def main():
 
                     #Write to DB
                     #DB will assign song ID so we're good
-                    sql = "INSERT INTO library_songs (library_id, artist, album_title, song_title, track_num, file_location, updated_at, created_at)"
-                    "VALUES (%s, %s, %s, %s, %s, %s, NOW(), NOW());"
+                    sql = "INSERT INTO library_songs (library_id, artist, album_artist, album_title, song_title, track_num, genre, compilation, crtc, year, length, file_location, updated_at, created_at) " + \
+                    "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW(), NOW());"
                     if(not dryRun):
-                        executeSQL(sql, [data[0][0],artist, album_title, song_title, track_num, dest_filenam])
+                        executeSQL(sql, [data[0][0],artist, albumartist, album_title, song_title, track_num[0], genre, compilation, category, year, length, dest_filename])
 
                 elif(len(data) > 1):
                     #found many matches again
