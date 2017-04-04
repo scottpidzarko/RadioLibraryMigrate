@@ -52,7 +52,7 @@ import shutil
 ##For MP3 ID3 tags
 import mutagen
 from mutagen.mp3 import EasyMP3 as eMP3
-from mutagen.mp3 import MP3 as MP3
+from mutagen.id3 import ID3 as ID3
 ##for mysql database acces
 import MySQLdb as my
 ##For fuzzy string finder
@@ -328,6 +328,7 @@ def getMP3Data(path,f):
     ret = {}
     try:
         audiofile = eMP3(os.path.normpath(path + "/" + f));
+        temp = ID3(os.path.normpath(path + "/" + f))
     except mutagen.mp3.HeaderNotFoundError as e:
         writeLog("HeaderNotFoundError")
         writeLog(e)
@@ -336,30 +337,29 @@ def getMP3Data(path,f):
         ret['artist'] = audiofile['artist'][0]
     except KeyError as e:
         writeLog("File " + f + " has no artist tagged")
-        ret[artist] = ""
+        ret[artist] = None
     try:
         ret['albumartist'] = audiofile['albumartist'][0]
     except KeyError as e:
         writeLog("File " + f + " has no albumartist tagged")
-        ret['albumartist'] = ""
+        ret['albumartist'] = None
     try:
         ret['album_title'] = audiofile['album'][0];
     except KeyError as e:
         writeLog("File " + f + " has no album title tagged")
-        ret['album_title'] = ""
+        ret['album_title'] = None
     try:
         ret['song_title'] = audiofile['title'][0]
     except KeyError as e:
         writeLog("File " + f + " has no song tagged")
-        ret['song_title'] = ""
+        ret['song_title'] = None
     try:
         ret['track_num'] = audiofile['tracknumber'][0];
     except KeyError as e:
         ret['track_num'] = None
         writeLog("File " + f + " has no tracknumber tagged")
-    temp = MP3(os.path.normpath(path + "/" + f))
     try:
-        category = ""#temp["COMM:0:'eng'"]
+        category = temp[u'COMM::eng'].text[0].lower()#[u'COMM:ID3v1 Comment:eng']
         #can safely default to category 20 since that's the most common
         ##TODO: Better regex matching here
         if(category == "category 1"):
@@ -405,8 +405,17 @@ def getMP3Data(path,f):
     except KeyError as e:
         print("File " + f + "has no language tagged")
     try:
-        mood = audidofile['mood']
+        mood = audiofile['mood'][0]
         mood = mood.lower()
+        ret['femcon'] = 0
+        ret['cancon'] = 0
+        ret['local'] = 0
+        if(fuzzyContains(mood,"femcon",15)):
+            ret['femcon'] = 1
+        if(fuzzyContains(mood,"cancon",15)):
+            ret['cancon'] = 1
+        if(fuzzyContains(mood,"local",15)):
+            ret['local'] = 1
     except KeyError as e:
         writeLog("File " + f + " has no mood (ie. Cancon/Femcon/Local) tagged")
         ret['femcon'] = 0
