@@ -120,6 +120,8 @@ def main():
             uppercaseArtist = formatForDoubleFilePath(tagData['artist'])
             if(album_title == artist):
                 selfTitled = 1
+            elif(album_title == albumartist)
+                selfTitled = 1
             else:
                 selfTitled = 0
             compilation = tagData['compilation']
@@ -152,17 +154,17 @@ def main():
 
                 #Write to DB
                 #DB will assign song ID so we're good
-                sql = "INSERT INTO library_songs (library_id, artist, album_title, song_title, track_num, tracks_total, file_location, updated_at, created_at) " + \
+                sql = "INSERT INTO library_songs (library_id, artist, album_title, song_title, track_num, file_location, updated_at, created_at) " + \
                 "VALUES (%s, %s, %s, %s, %s, %s, %s, NOW(), NOW());"
                 if(not dryRun):
-                    executeSQL(sql, [data[0][0],artist, album_title, song_title, track_num[0], track_num[2:], dest_filename])
+                    executeSQL(sql, [data[0][0],artist, album_title, song_title, track_num[0], dest_filename])
 
             elif(len(data) > 1):
                 #Multiple albums with that name, try and match by artist
                 writeLog("Multiple albums found for " + album_title)
                 writeLog("Trying to match based on artist ...")
                 sql = "SELECT %s FROM library where title like %s and artist like %s;"
-                if(not albumartist)
+                if not albumartist:
                     data = executeSQL(sql, ["id",album_title,artist])
                 else:
                     data = executeSQL(sql, ["id",album_title,albumartist])
@@ -439,7 +441,12 @@ def formatForDoubleFilePath(s):
     worry about DOS reserved names
     """
     invalid_chars = "<>:\"/\|?*"
-    filename = ''.join(c for c in s if c not in invalid_chars)
+    filename = ''
+    for c in s:
+        if c not in invalid_chars:
+            filename.join(c)
+        else:
+            filename.join('-')
     filename = filename.replace('.','') #no periods in the doubles as discussed
     filename = filename.replace(',','') #no commas in the doubles as discussed
     return filename.upper()
@@ -453,7 +460,12 @@ Be aware.
 
 """
     valid_chars = "-_()$!@#^&~`\+=[]}{'., %s%s" % (string.digits,'%')
-    filename = ''.join(c for c in s if c in valid_chars or c.isalpha())
+    filename = ''
+    for c in s:
+        if c in valid_chars or c.isalpha():
+            filename.join(c)
+        else:
+            filename.join('-')
     badlist = ("CON", "PRN", "AUX", "NUL", "COM1", "COM2", "COM3", "COM4", "COM5",
 	 "COM6", "COM7", "COM8", "COM9", "LPT1", "LPT2", "LPT3", "LPT4", "LPT5",
 	 "LPT6", "LPT7", "LPT8", "LPT9", "nul")
