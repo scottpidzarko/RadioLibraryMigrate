@@ -83,13 +83,14 @@ log_file = config.log_file
 errorfiles = config.errorfile
 
 #regex pattern for detecting "the" at the start of a string
-reForThe = re.compile('^the', re.IGNORECASE);
+reForThe = re.compile('^the', re.IGNORECASE)
+dryRun = False
 
 def main():
-    dryRun = False
     if(len(sys.argv) > 1 and (sys.argv[1] == "--dry-run" or sys.argv[2] == "--dry-run")):
         dryRun = True
     else:
+        dryRun = False
         if( not query_yes_no("This is a *live* run. Are you sure?", "no")):
             print( "Aborting ..." )
             return
@@ -99,14 +100,15 @@ def main():
     writeLog("----------------------------------------------------------------")
 
     for path, dirs, files in os.walk(libary_basedir):
+        print("Going into " + path)
         writeLog("Going into " + path)
         for f in files:
-            writeLog("Processing: \"" + f + "\"");
+            writeLog("Processing: \"" + f + "\"")
+            print("Processing: \"" + f + "\"");
 
             tagData = getMP3Data(path,f)
             if(not tagData):
                 continue
-            print(tagData)
 
             album_title = tagData['album_title']
             song_title = tagData['song_title']
@@ -130,27 +132,23 @@ def main():
             year = tagData['year']
 
             writeLog("Artist: " + artist + ", Album: " + album_title + ", Title: " + song_title + ", #" + str(track_num))
+            print("Artist: " + artist + ", Album: " + album_title + ", Title: " + song_title + ", #" + str(track_num))
 
             #try and find the albumID for the song from the library table first with an exact match and then a fuzzy finder
             sql = "SELECT id FROM library where title like %s;"
             data = executeSQL(sql, [album_title])
-            print(data)
 
-            if(len(data) == 1):
+
+            if(data is not None and len(data) == 1):
                 #Found a unique match
                 writeLog("Exact Match Found for " + song_title)
                 writeLog(data[0][0]);
 
                 #move to correct folder
-                source_filename = os.path.normpath(path + "/" + f)
-                dest_filename = os.path.normpath(library_destination + "/" + uppercaseArtist[0:1] + "/" +
-                 uppercaseArtist[0:2] + "/" + formatFileName(artist) + "/" + formatFileName(album_title) + "/" +
-                 formatFileName(track_num + " " + artist + " - " + song_title))
-                ensure_dir(os.path.dirname(dest_filename))
-                if(not dryRun):
-                    shutil.copy2(source_filename,dest_filename)
-
-                writeLog("Copied " + source_filename + " to " + dest_filename)
+                if not albumartist:
+                    dest_filename = moveLibrary(path,f,artist,uppercaseArtist,album_title,track_num,song_title)
+                else:
+                    dest_filename = moveLibrary(path,f,albumartist,formatForDoubleFilePath(albumartist),album_title,track_num,song_title)
 
                 #Write to DB
                 #DB will assign song ID so we're good
@@ -159,7 +157,7 @@ def main():
                 if(not dryRun):
                     executeSQL(sql, [data[0][0],artist, albumartist, album_title, song_title, track_num[0], genre, compilation, category, year, length, dest_filename])
 
-            elif(len(data) > 1):
+            elif(data is not None and len(data) > 1):
                 #Multiple albums with that name, try and match by artist
                 writeLog("Multiple albums found for " + album_title)
                 writeLog("Trying to match based on artist ...")
@@ -168,7 +166,6 @@ def main():
                     data = executeSQL(sql, ["id",album_title,artist])
                 else:
                     data = executeSQL(sql, ["id",album_title,albumartist])
-                writeLog(data);
 
                 if(len(data) == 1):
                     ##Found a unique match
@@ -176,15 +173,10 @@ def main():
                     writeLog(data[0][0]);
 
                     #move to correct folder
-                    source_filename = os.path.normpath(path + "/" + f)
-                    dest_filename = os.path.normpath(library_destination + "/" + uppercaseArtist[0:1] + "/" +
-                     uppercaseArtist[0:2] + "/" + formatFileName(artist) + "/" + formatFileName(album_title) + "/" +
-                     formatFileName(track_num) + " " + formatFileName(artist) + " - " + formatFileName(song_title))
-                    ensure_dir(os.path.dirname(dest_filename))
-                    if(not dryRun):
-                        shutil.copy2(source_filename,dest_filename)
-
-                    writeLog("Copied " + source_filename + " to " + dest_filename)
+                    if not albumartist:
+                        dest_filename = moveLibrary(path,f,artist,uppercaseArtist,album_title,track_num,song_title)
+                    else:
+                        dest_filename = moveLibrary(path,f,albumartist,formatForDoubleFilePath(albumartist),album_title,track_num,song_title)
 
                     #Write to DB
                     #DB will assign song ID so we're good
@@ -199,39 +191,29 @@ def main():
                     writeLog( "Too many Matches found for " + song_title)
 
                     #move to error folder
-                    source_filename = os.path.normpath(path + "/" + f)
-                    dest_filename = os.path.normpath(working_directory + "/" + errorfiles + "/" + uppercaseArtist[0:1] + "/" +
-					 uppercaseArtist[0:2] + "/" + artist + "/" + track_num + " " + artist + " - " + song_title)
-                    ensure_dir(os.path.dirname(dest_filename))
-                    if(not dryRun):
-                        shutil.copy2(source_filename,dest_filename)
+                    if not albumartist:
+                        moveError(path,f,artist,uppercaseArtist,album_title,track_num,song_title)
+                    else:
+                        moveError(path,f,albumartist,formatForDoubleFilePath(albumartist),album_title,track_num,song_title)
                 else:
                     #No matches found - title is matching multiple but can't find an artist name
                     #move into "inconclusive" folder
                     #no match, move to the "potential problems folder" and log, with potential matches using fuzzy finder
                     writeLog( "No match found for " + song_title)
-
                     #move to error folder
-                    source_filename = os.path.normpath(path + "/" + f)
-                    dest_filename = os.path.normpath(library_destination + "/" + uppercaseArtist[0:1] + "/" +
-                     uppercaseArtist[0:2] + "/" + formatFileName(artist) + "/" + formatFileName(album_title) + "/" +
-                     formatFileName(track_num) + " " + formatFileName(artist) + " - " + formatFileName(song_title))
-                    ensure_dir(os.path.dirname(dest_filename))
-                    if(not dryRun):
-                        shutil.copy2(source_filename,dest_filename)
+                    if not albumartist:
+                        moveError(path,f,artist,uppercaseArtist,album_title,track_num,song_title)
+                    else:
+                        moveError(path,f,albumartist,formatForDoubleFilePath(albumartist),album_title,track_num,song_title)
 
             else:
                 #no match, move to the "potential problems folder" and log, with potential matches using fuzzy finder
                 writeLog( "No match found for " + song_title)
-
                 #move to error folder
-
-                source_filename = os.path.normpath(path + "/" + f)
-                dest_filename = os.path.normpath(working_directory + "/" + errorfiles + "/" + uppercaseArtist[0:1]
-				 + "/" + uppercaseArtist[0:2] + "/" + artist + "/" + track_num + " " + artist + " - " + song_title)
-                ensure_dir(os.path.dirname(dest_filename))
-                if(not dryRun):
-                    shutil.copy2(source_filename,dest_filename)
+                if not albumartist:
+                    moveError(path,f,artist,uppercaseArtist,album_title,track_num,song_title)
+                else:
+                    moveError(path,f,albumartist,formatForDoubleFilePath(albumartist),album_title,track_num,song_title)
 
 """""
 Runs the query given by sql query and the array of parameters given in params. Defaults to no parameters if none are passed
@@ -256,7 +238,9 @@ def executeSQL(sqlquery, params=None):
             db.close()
 
             #https://stackoverflow.com/questions/17861152/cursor-fetchall-vs-listcursor-in-python
-            return list(cursor)
+            data = list(cursor)
+            writeLog("Query Returned: " + data);
+            return data
 
         except my.DataError as e:
             writeLog("DataError")
@@ -304,7 +288,9 @@ def executeSQL(sqlquery, params=None):
             db.close()
 
             #https://stackoverflow.com/questions/17861152/cursor-fetchall-vs-listcursor-in-python
-            return list(cursor)
+            data = list(cursor)
+            writeLog("Query Returned: " + data);
+            return data
 
         except my.DataError as e:
             writeLog("DataError")
@@ -362,7 +348,9 @@ def getMP3Data(path,f):
         writeLog("File " + f + " has no song tagged")
         ret['song_title'] = None
     try:
-        ret['track_num'] = audiofile['tracknumber'][0];
+        #Python 3 only for line below, may cause problems otherwise
+        #format adds the leading zero to single-digit #s
+        ret['track_num'] = (audiofile['tracknumber'][0][0]).zfill(2)
     except KeyError as e:
         ret['track_num'] = None
         writeLog("File " + f + " has no tracknumber tagged")
@@ -477,8 +465,10 @@ Be aware.
     if ((filename == ".......") or (filename == "dir.exe")):
         return "(bad filename)." + filename.rsplit( ".",1)[ 1 ]
     #trim if it's too long
-    return textwrap.shorten(filename, width=250, placeholder="...")
-
+    if(len(filename) > 250):
+        return filename[0:250] + ...
+    else:
+        return filename
 #helper function to ensure a certain directory f exists
 #if it doesn't find it, it will make it
 #Updated for python 3.2+
@@ -554,6 +544,28 @@ def fuzzyContains(qs, ls, threshold):
             return True
 
     return False
+
+def moveLibrary(path,f,artist,uppercaseArtist,album_title,track_num,song_title):
+    source_filename = os.path.normpath(path + "/" + f)
+    dest_filename = os.path.normpath(library_destination + "/" + uppercaseArtist[0:1] + "/" +
+     uppercaseArtist[0:2] + "/" + formatFileName(artist) + "/" + formatFileName(album_title) + "/" +
+     formatFileName(track_num) + " " + formatFileName(artist) + " - " + formatFileName(song_title))
+    ensure_dir(os.path.dirname(dest_filename))
+    if(not dryRun):
+        shutil.copy2(source_filename,dest_filename)
+    writeLog("Copied " + source_filename + " to " + dest_filename)
+
+    return dest_filename
+
+def moveError(path,f,artist,uppercaseArtist,album_title,track_num,song_title):
+    source_filename = os.path.normpath(path + "/" + f)
+    dest_filename = os.path.normpath(working_directory + "/" + errorfiles + "/" + uppercaseArtist[0:1] + "/" +
+     uppercaseArtist[0:2] + "/" + formatFileName(artist) + "/" + formatFileName(album_title) + "/" +
+     formatFileName(track_num) + " " + formatFileName(artist) + " - " + formatFileName(song_title))
+    ensure_dir(os.path.dirname(dest_filename))
+    if(not dryRun):
+        shutil.copy2(source_filename,dest_filename)
+    writeLog("Copied " + source_filename + " to " + dest_filename)
 
 if __name__ == "__main__":
     main()
