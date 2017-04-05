@@ -1,5 +1,6 @@
 import unittest
 import main
+import string
 
 #Example
 """class IntegerArithmenticTestCase(unittest.TestCase):
@@ -47,6 +48,26 @@ class FuzzyMatchTestCase(unittest.TestCase):
         for misspelling in self.localMisspell:
             #print(misspelling)
             self.assertEqual(main.fuzzyContains(misspelling, "local", 15), True)
+
+class FilenameSanitizeTestCase(unittest.TestCase):
+    @classmethod
+    def setUpClass(self):
+        pass
+
+    def testLegitimateString(self):
+        self.assertEqual(main.formatFileName("A totally Legit string"), "A totally Legit string")
+        self.assertEqual(main.formatFileName("-_()$!@#^&~`+=[]}{'., %s%s" % (string.digits,'%')), "-_()$!@#^&~`+=[]}{'., %s%s" % (string.digits,'%'))
+        self.assertEqual(main.formatForDoubleFilePath("A totally Legit string"), "A totally Legit string".upper())
+        self.assertEqual(main.formatForDoubleFilePath("-_()$!@#^&~`+=[]}{\'., %s%s" % (string.digits,'%')), ("-_()$!@#^&~`+=[]}{\' %s%s" % (string.digits,'%')).upper())
+
+    def testIllegitimateString(self):
+        self.assertEqual(main.formatFileName("A totally <>:\"/\|?* Not Legit string"), "A totally --------- Not Legit string")
+        badlist = ("CON", "PRN", "AUX", "NUL", "COM1", "COM2", "COM3", "COM4", "COM5",
+    	 "COM6", "COM7", "COM8", "COM9", "LPT1", "LPT2", "LPT3", "LPT4", "LPT5",
+    	 "LPT6", "LPT7", "LPT8", "LPT9", "nul")
+        for s in badlist:
+            self.assertEqual(main.formatFileName(s+".exe"), "(bad filename).exe")
+        self.assertEqual(main.formatForDoubleFilePath("A totally <>:\"/\|?* Not Legit string"), "A totally --------- Not Legit string".upper())
 
 if __name__ == '__main__':
         unittest.main()

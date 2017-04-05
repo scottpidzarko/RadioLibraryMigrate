@@ -155,7 +155,7 @@ def main():
                 #Write to DB
                 #DB will assign song ID so we're good
                 sql = "INSERT INTO library_songs (library_id, artist, album_artist, album_title, song_title, track_num, genre, compilation, crtc, year, length, file_location, updated_at, created_at) " + \
-                "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW(), NOW());"
+                "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW(), NOW());"
                 if(not dryRun):
                     executeSQL(sql, [data[0][0],artist, albumartist, album_title, song_title, track_num[0], genre, compilation, category, year, length, dest_filename])
 
@@ -179,7 +179,7 @@ def main():
                     source_filename = os.path.normpath(path + "/" + f)
                     dest_filename = os.path.normpath(library_destination + "/" + uppercaseArtist[0:1] + "/" +
                      uppercaseArtist[0:2] + "/" + formatFileName(artist) + "/" + formatFileName(album_title) + "/" +
-                     formatFileName(track_num + " " + artist + " - " + song_title))
+                     formatFileName(track_num) + " " + formatFileName(artist) + " - " + formatFileName(song_title))
                     ensure_dir(os.path.dirname(dest_filename))
                     if(not dryRun):
                         shutil.copy2(source_filename,dest_filename)
@@ -189,7 +189,7 @@ def main():
                     #Write to DB
                     #DB will assign song ID so we're good
                     sql = "INSERT INTO library_songs (library_id, artist, album_artist, album_title, song_title, track_num, genre, compilation, crtc, year, length, file_location, updated_at, created_at) " + \
-                    "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW(), NOW());"
+                    "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW(), NOW());"
                     if(not dryRun):
                         executeSQL(sql, [data[0][0],artist, albumartist, album_title, song_title, track_num[0], genre, compilation, category, year, length, dest_filename])
 
@@ -213,8 +213,9 @@ def main():
 
                     #move to error folder
                     source_filename = os.path.normpath(path + "/" + f)
-                    dest_filename = os.path.normpath(working_directory + "/" + errorfiles + "/" + uppercaseArtist[0:1] + "/"
-					 + uppercaseArtist[0:2] + "/" + artist + "/" + track_num + " " + artist + " - " + song_title)
+                    dest_filename = os.path.normpath(library_destination + "/" + uppercaseArtist[0:1] + "/" +
+                     uppercaseArtist[0:2] + "/" + formatFileName(artist) + "/" + formatFileName(album_title) + "/" +
+                     formatFileName(track_num) + " " + formatFileName(artist) + " - " + formatFileName(song_title))
                     ensure_dir(os.path.dirname(dest_filename))
                     if(not dryRun):
                         shutil.copy2(source_filename,dest_filename)
@@ -284,7 +285,9 @@ def executeSQL(sqlquery, params=None):
         except :
             writeLog("Unknown error occurred")
     else:
-        writeLog("Executing the folowing SQL Query: " + sqlquery)
+        writeLog("Executing the folowing SQL Query: ")
+        writeLog(sqlquery)
+        writeLog(tuple(params))
         if(not isinstance(params,list)):
             print("Please pass arguments as an array, ie. [param1, param2, param3, ...]")
             return False;
@@ -440,13 +443,13 @@ def formatForDoubleFilePath(s):
     The strings are used only for one/two character lengths so don't have to
     worry about DOS reserved names
     """
-    invalid_chars = "<>:\"/\|?*"
-    filename = ''
+    invalid_chars = "<>:\"/\\|?*"
+    filename = ""
     for c in s:
         if c not in invalid_chars:
-            filename.join(c)
+            filename += c
         else:
-            filename.join('-')
+            filename += '-'
     filename = filename.replace('.','') #no periods in the doubles as discussed
     filename = filename.replace(',','') #no commas in the doubles as discussed
     return filename.upper()
@@ -459,20 +462,20 @@ Note: this method may produce invalid filenames such as ``, `.` or `..`
 Be aware.
 
 """
-    valid_chars = "-_()$!@#^&~`\+=[]}{'., %s%s" % (string.digits,'%')
-    filename = ''
+    valid_chars = "-_()$!@#^&~`+=[]}{\'., %s%s" % (string.digits,'%')
+    filename = ""
     for c in s:
         if c in valid_chars or c.isalpha():
-            filename.join(c)
+            filename += c
         else:
-            filename.join('-')
+            filename += '-'
     badlist = ("CON", "PRN", "AUX", "NUL", "COM1", "COM2", "COM3", "COM4", "COM5",
 	 "COM6", "COM7", "COM8", "COM9", "LPT1", "LPT2", "LPT3", "LPT4", "LPT5",
 	 "LPT6", "LPT7", "LPT8", "LPT9", "nul")
     if( filename.rsplit( ".", 1 )[ 0 ] in badlist):
-        return "(bad filename)" + filename.rsplit( ".",1)[ 1 ]
+        return "(bad filename)." + filename.rsplit( ".",1)[ 1 ]
     if ((filename == ".......") or (filename == "dir.exe")):
-        return "(bad filename)" + filename.rsplit( ".",1)[ 1 ]
+        return "(bad filename)." + filename.rsplit( ".",1)[ 1 ]
     #trim if it's too long
     return textwrap.shorten(filename, width=250, placeholder="...")
 
