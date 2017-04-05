@@ -229,17 +229,15 @@ def executeSQL(sqlquery, params=None):
         try:
             writeLog("Executing the following SQL Query: " + sqlquery);
             db = my.connect(db_host,db_username,db_password,db_schema)
-
             cursor = db.cursor()
-
             cursor.execute(sqlquery)
-
+            #https://stackoverflow.com/questions/17861152/cursor-fetchall-vs-listcursor-in-python
+            data = list(cursor)
             db.commit()
             db.close()
 
-            #https://stackoverflow.com/questions/17861152/cursor-fetchall-vs-listcursor-in-python
-            data = list(cursor)
-            writeLog("Query Returned: " + data);
+            writeLog("Query Returned: ")
+            writeLog(data);
             return data
 
         except my.DataError as e:
@@ -271,6 +269,7 @@ def executeSQL(sqlquery, params=None):
     else:
         writeLog("Executing the folowing SQL Query: ")
         writeLog(sqlquery)
+        writeLog("With the following parameters: ")
         writeLog(tuple(params))
         if(not isinstance(params,list)):
             print("Please pass arguments as an array, ie. [param1, param2, param3, ...]")
@@ -279,17 +278,15 @@ def executeSQL(sqlquery, params=None):
 
         try:
             db = my.connect(db_host,db_username,db_password,db_schema)
-
             cursor = db.cursor()
-
             cursor.execute(sqlquery, paramsTuple)
-
+            #https://stackoverflow.com/questions/17861152/cursor-fetchall-vs-listcursor-in-python
+            data = list(cursor)
             db.commit()
             db.close()
 
-            #https://stackoverflow.com/questions/17861152/cursor-fetchall-vs-listcursor-in-python
-            data = list(cursor)
-            writeLog("Query Returned: " + data);
+            writeLog("Query Returned: ")
+            writeLog(data);
             return data
 
         except my.DataError as e:
@@ -466,7 +463,7 @@ Be aware.
         return "(bad filename)." + filename.rsplit( ".",1)[ 1 ]
     #trim if it's too long
     if(len(filename) > 250):
-        return filename[0:250] + ...
+        return filename[0:249] + "..."
     else:
         return filename
 #helper function to ensure a certain directory f exists

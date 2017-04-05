@@ -61,6 +61,7 @@ class FilenameSanitizeTestCase(unittest.TestCase):
         self.assertEqual(main.formatForDoubleFilePath("-_()$!@#^&~`+=[]}{\'., %s%s" % (string.digits,'%')), ("-_()$!@#^&~`+=[]}{\' %s%s" % (string.digits,'%')).upper())
         self.assertEqual(main.formatFileName("TrailingSpaceTest "),"TrailingSpaceTest ")
         self.assertEqual(main.formatForDoubleFilePath("TrailingSpaceTest "),"TRAILINGSPACETEST ")
+        self.assertEqual(main.formatFileName("PMUuKZYzT6bTUlwBQ9oZHDiTNq3ba9VyCMX70xIoMs02QOTgJ3z0kepsCSbSe2YawNrP4vvHugoqCwOGD4IhmFcyYTxWG6X26WiJ6uKT7JIcHhXNpmAqTwfPbGONmOV48yOfoQPQ409TETbrtLgfZcXgMCxavJtmYpP7HRVo58o9Z6RgbPwlgl6zazLJq9mSr0FPcHwsgFu9k4l7v2qyukBBkEwDI4Oug1W57q9jXEuo3jq7V5AAM3umAHIzSGM"),"PMUuKZYzT6bTUlwBQ9oZHDiTNq3ba9VyCMX70xIoMs02QOTgJ3z0kepsCSbSe2YawNrP4vvHugoqCwOGD4IhmFcyYTxWG6X26WiJ6uKT7JIcHhXNpmAqTwfPbGONmOV48yOfoQPQ409TETbrtLgfZcXgMCxavJtmYpP7HRVo58o9Z6RgbPwlgl6zazLJq9mSr0FPcHwsgFu9k4l7v2qyukBBkEwDI4Oug1W57q9jXEuo3jq7V5AAM3umA...")
 
     def testIllegitimateString(self):
         string = "A totally <>:\"/\|?* Not Legit string"
