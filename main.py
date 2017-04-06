@@ -119,7 +119,7 @@ def main():
             #if so, will use "artist, the" structure
             artist = formatArtist(tagData['artist']);
             #for filepath moving - precompute
-            uppercaseArtist = formatForDoubleFilePath(tagData['artist'])
+            uppercaseArtist = formatForDoubleFilePath(formatArtist(tagData['artist']))
             if(album_title == artist):
                 selfTitled = 1
             elif(album_title == albumartist):
@@ -131,7 +131,7 @@ def main():
             genre = tagData['genre']
             year = tagData['year']
 
-            writeLog("Artist: " + artist + ", Album: " + album_title + ", Title: " + song_title + ", #" + str(track_num))
+            writeLog("Artist: " + xstr(artist) + ", Album: " + xstr(album_title) + ", Title: " + xstr(song_title) + ", #" + xstr(track_num))
             print("Artist: " + artist + ", Album: " + album_title + ", Title: " + song_title + ", #" + str(track_num))
 
             #try and find the albumID for the song from the library table first with an exact match and then a fuzzy finder
@@ -141,7 +141,7 @@ def main():
 
             if(data is not None and len(data) == 1):
                 #Found a unique match
-                writeLog("Exact Match Found for " + song_title)
+                writeLog("Exact Match Found for " + xstr(song_title))
                 writeLog(data[0][0]);
 
                 #move to correct folder
@@ -155,7 +155,7 @@ def main():
                 sql = "INSERT INTO library_songs (library_id, artist, album_artist, album_title, song_title, track_num, genre, compilation, crtc, year, length, file_location, updated_at, created_at) " + \
                 "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW(), NOW());"
                 if(not dryRun):
-                    executeSQL(sql, [data[0][0],artist, albumartist, album_title, song_title, track_num[0], genre, compilation, category, year, length, dest_filename])
+                    executeSQL(sql, [data[0][0],artist, albumartist, album_title, song_title, track_num, genre, compilation, category, year, length, dest_filename])
 
             elif(data is not None and len(data) > 1):
                 #Multiple albums with that name, try and match by artist
@@ -167,9 +167,9 @@ def main():
                 else:
                     data = executeSQL(sql, ["id",album_title,albumartist])
 
-                if(len(data) == 1):
+                if(data is not None and len(data) == 1):
                     ##Found a unique match
-                    writeLog("Exact Match Found for " + song_title)
+                    writeLog("Exact Match Found for " + xstr(song_title))
                     writeLog(data[0][0]);
 
                     #move to correct folder
@@ -183,12 +183,12 @@ def main():
                     sql = "INSERT INTO library_songs (library_id, artist, album_artist, album_title, song_title, track_num, genre, compilation, crtc, year, length, file_location, updated_at, created_at) " + \
                     "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW(), NOW());"
                     if(not dryRun):
-                        executeSQL(sql, [data[0][0],artist, albumartist, album_title, song_title, track_num[0], genre, compilation, category, year, length, dest_filename])
+                        executeSQL(sql, [data[0][0],artist, albumartist, album_title, song_title, track_num, genre, compilation, category, year, length, dest_filename])
 
-                elif(len(data) > 1):
+                elif(data is not None and len(data) > 1):
                     #found many matches again
                     #no match, move to the "potential problems folder" and log, with potential matches using fuzzy finder
-                    writeLog( "Too many Matches found for " + song_title)
+                    writeLog( "Too many Matches found for " + xstr(song_title))
 
                     #move to error folder
                     if not albumartist:
@@ -208,7 +208,7 @@ def main():
 
             else:
                 #no match, move to the "potential problems folder" and log, with potential matches using fuzzy finder
-                writeLog( "No match found for " + song_title)
+                writeLog( "No match found for " + xstr(song_title))
                 #move to error folder
                 if not albumartist:
                     moveError(path,f,artist,uppercaseArtist,album_title,track_num,song_title)
@@ -418,9 +418,18 @@ def getMP3Data(path,f):
 
 #If the artist has a "The ______", change the name into "______, the"
 def formatArtist(artist):
-    if(reForThe.match(artist)):
-        artist = artist[4:] + ", The"
-    return artist
+    try:
+        if(reForThe.match(artist)):
+            artist = artist[4:] + ", The"
+        return artist
+    except:
+        writeLog("Error in formatArtist(" + xstr(artist) + ")")
+
+#return empty string if string is of none type
+def xstr(s):
+    if s is None:
+        return ''
+    return str(s)
 
 # see https://stackoverflow.com/questions/62771/how-do-i-check-if-a-given-string-is-a-legal-valid-file-name-under-windows
 def formatForDoubleFilePath(s):
@@ -428,16 +437,65 @@ def formatForDoubleFilePath(s):
     The strings are used only for one/two character lengths so don't have to
     worry about DOS reserved names
     """
-    invalid_chars = "<>:\"/\\|?*"
-    filename = ""
-    for c in s:
-        if c not in invalid_chars:
-            filename += c
+    try:
+        #handle None type:
+        s = xstr(s)
+        invalid_chars = "<>:\"/\\|?*"
+        filename = ""
+        for c in s:
+            if c not in invalid_chars:
+                filename += c
+            else:
+                filename += '-'
+        filename = filename.replace('.','') #no periods in the doubles as discussed
+        filename = filename.replace(',','') #no commas in the doubles as discussed
+        filename = filename.replace(' ','_') #no commas in the doubles as discussed
+        return filename.upper()[0:2]
+    except TypeError as e:
+        writeLog("Error in formatForDoubleFilePath(" + xstr(s) + "). The following error was thrown:")
+        writeLog(e)
+    except:
+        writeLog("Unknown Error in formatForDoubleFilePath(" + xstr(s) + ")")
+
+def formatFileDirectory(s):
+    """Take a string and return a valid dirname constructed from the string.
+Uses a whitelist approach: any characters not present in valid_chars are
+removed.
+Note: this method may produce invalid filenames such as ``, `.` or `..`
+Be aware.
+
+"""
+    try:
+        #handle None type:
+        s = xstr(s)
+        valid_chars = "-_()$!@#^&~`+=[]}{\'., %s%s" % (string.digits,'%')
+        filename = ""
+        for c in s:
+            if c in valid_chars or c.isalpha():
+                filename += c
+            else:
+                filename += '-'
+        badlist = ("CON", "PRN", "AUX", "NUL", "COM1", "COM2", "COM3", "COM4", "COM5",
+         "COM6", "COM7", "COM8", "COM9", "LPT1", "LPT2", "LPT3", "LPT4", "LPT5",
+         "LPT6", "LPT7", "LPT8", "LPT9", "nul")
+        if( filename.rsplit( ".", 1 )[ 0 ] in badlist):
+            return "(bad filename)." + filename.rsplit( ".",1)[ 1 ]
+        if ((filename == ".......") or (filename == "dir.exe")):
+            return "(bad filename)." + filename.rsplit( ".",1)[ 1 ]
+
+        # can't have trailing dots in directories
+        filename = filename.rstrip('.')
+
+        #trim if it's too long
+        if(len(filename) > 250):
+            return filename[0:249]
         else:
-            filename += '-'
-    filename = filename.replace('.','') #no periods in the doubles as discussed
-    filename = filename.replace(',','') #no commas in the doubles as discussed
-    return filename.upper()
+            return filename
+    except TypeError as e:
+        writeLog("Error in formatFileDirectory(" + xstr(s) + "). The following error was thrown:")
+        writeLog(e)
+    except:
+        writeLog("Unknown Error in formatFileDirectory(" + xstr(s) + ")")
 
 def formatFileName(s):
     """Take a string and return a valid filename constructed from the string.
@@ -447,25 +505,34 @@ Note: this method may produce invalid filenames such as ``, `.` or `..`
 Be aware.
 
 """
-    valid_chars = "-_()$!@#^&~`+=[]}{\'., %s%s" % (string.digits,'%')
-    filename = ""
-    for c in s:
-        if c in valid_chars or c.isalpha():
-            filename += c
+    try:
+        #handle None type:
+        s = xstr(s)
+        valid_chars = "-_()$!@#^&~`+=[]}{\'., %s%s" % (string.digits,'%')
+        filename = ""
+        for c in s:
+            if c in valid_chars or c.isalpha():
+                filename += c
+            else:
+                filename += '-'
+        badlist = ("CON", "PRN", "AUX", "NUL", "COM1", "COM2", "COM3", "COM4", "COM5",
+         "COM6", "COM7", "COM8", "COM9", "LPT1", "LPT2", "LPT3", "LPT4", "LPT5",
+         "LPT6", "LPT7", "LPT8", "LPT9", "nul")
+        if( filename.rsplit( ".", 1 )[ 0 ] in badlist):
+            return "(bad filename)." + filename.rsplit( ".",1)[ 1 ]
+        if ((filename == ".......") or (filename == "dir.exe")):
+            return "(bad filename)." + filename.rsplit( ".",1)[ 1 ]
+        #trim if it's too long
+        if(len(filename) > 250):
+            return filename[0:249] + "..."
         else:
-            filename += '-'
-    badlist = ("CON", "PRN", "AUX", "NUL", "COM1", "COM2", "COM3", "COM4", "COM5",
-	 "COM6", "COM7", "COM8", "COM9", "LPT1", "LPT2", "LPT3", "LPT4", "LPT5",
-	 "LPT6", "LPT7", "LPT8", "LPT9", "nul")
-    if( filename.rsplit( ".", 1 )[ 0 ] in badlist):
-        return "(bad filename)." + filename.rsplit( ".",1)[ 1 ]
-    if ((filename == ".......") or (filename == "dir.exe")):
-        return "(bad filename)." + filename.rsplit( ".",1)[ 1 ]
-    #trim if it's too long
-    if(len(filename) > 250):
-        return filename[0:249] + "..."
-    else:
-        return filename
+            return filename
+    except TypeError as e:
+        writeLog("Error in formatFileName(" + xstr(s) + "). The following error was thrown:")
+        writeLog(e)
+    except:
+        writeLog("Unknown Error in formatFileName(" + xstr(s) + ")")
+
 #helper function to ensure a certain directory f exists
 #if it doesn't find it, it will make it
 #Updated for python 3.2+
@@ -513,7 +580,24 @@ def query_yes_no(question, default="yes"):
             sys.stdout.write("Please respond with 'yes' or 'no' "
                              "(or 'y' or 'n').\n")
 
+def restore_windows_1252_characters(s):
+    """Replace C1 control characters in the Unicode string s by the
+    characters at the corresponding code points in Windows-1252,
+    where possible.
+
+    """
+    import re
+    def to_windows_1252(match):
+        try:
+            return bytes([ord(match.group(0))]).decode('windows-1252')
+        except UnicodeDecodeError:
+            # No character at the corresponding code point: remove it.
+            return ''
+    return re.sub(r'[\u0080-\u0099]', to_windows_1252, s)
+
 def writeLog(instring):
+    if isinstance(instring,str):
+        instring = restore_windows_1252_characters(instring)
     #write that we're starting a batch job to the log file
     try:
         if(checkIfFile(working_directory + "/" + log_file)):
@@ -526,12 +610,17 @@ def writeLog(instring):
         print( "Error: Log File does not appear to exist or you do not have the permissions to write to it!" )
         return
     log.write( "[" + str(datetime.now()) + "]" + "    ")
-    log.write(str(instring) + "\n")
+    #xstr handles none type
+    log.write(xstr(instring) + "\n")
     log.close()
 
 def fuzzyContains(qs, ls, threshold):
     '''fuzzy matches 'qs' in 'ls' and returns true if there is a match close enough
     '''
+    #handle None values
+    qs = xstr(qs)
+    ls = xstr(ls)
+
     for word, _ in process.extractBests(qs, (ls,), score_cutoff=threshold):
         #print('word {}'.format(word))
         for match in find_near_matches(qs, word, max_l_dist=1):
@@ -545,8 +634,8 @@ def fuzzyContains(qs, ls, threshold):
 def moveLibrary(path,f,artist,uppercaseArtist,album_title,track_num,song_title):
     source_filename = os.path.normpath(path + "/" + f)
     dest_filename = os.path.normpath(library_destination + "/" + uppercaseArtist[0:1] + "/" +
-     uppercaseArtist[0:2] + "/" + formatFileName(artist) + "/" + formatFileName(album_title) + "/" +
-     formatFileName(track_num) + " " + formatFileName(artist) + " - " + formatFileName(song_title))
+     uppercaseArtist[0:2] + "/" + formatFileDirectory(artist) + "/" + formatFileDirectory(album_title) + "/" +
+     formatFileName(track_num) + " " + formatFileName(artist) + " - " + formatFileName(song_title) + ".mp3")
     ensure_dir(os.path.dirname(dest_filename))
     if(not dryRun):
         shutil.copy2(source_filename,dest_filename)
@@ -557,8 +646,8 @@ def moveLibrary(path,f,artist,uppercaseArtist,album_title,track_num,song_title):
 def moveError(path,f,artist,uppercaseArtist,album_title,track_num,song_title):
     source_filename = os.path.normpath(path + "/" + f)
     dest_filename = os.path.normpath(working_directory + "/" + errorfiles + "/" + uppercaseArtist[0:1] + "/" +
-     uppercaseArtist[0:2] + "/" + formatFileName(artist) + "/" + formatFileName(album_title) + "/" +
-     formatFileName(track_num) + " " + formatFileName(artist) + " - " + formatFileName(song_title))
+     uppercaseArtist[0:2] + "/" + formatFileDirectory(artist) + "/" + formatFileDirectory(album_title) + "/" +
+     formatFileName(track_num) + " " + formatFileName(artist) + " - " + formatFileName(song_title) + ".mp3")
     ensure_dir(os.path.dirname(dest_filename))
     if(not dryRun):
         shutil.copy2(source_filename,dest_filename)
