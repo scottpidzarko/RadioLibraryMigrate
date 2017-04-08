@@ -50,20 +50,27 @@ class FuzzyMatchTestCase(unittest.TestCase):
             self.assertEqual(main.fuzzyContains(misspelling, "local", 15), True)
 
 #Since this deals with database tests we will use a modified version of the function to test it on an
-class fuzzySQLMatch:
-    data = ((1,"Good Tst"),(2,"Gibbrish Something Else"),(3,"A Good Test String"), (4,"A GoodTestStrign"),
-    (5,"kjlkja;ldkjf"), (6,"A Bad Test String"),(7,"Firstname, Lastname"), (8,"Lastname, Firstname"),
-    (9,"Firstname Lastname"), (10,"Lastname Firstname"), (11, "Firstname LAstnaem"), (12, "LAsTnaem Firstname"), (13, "Something Firstname"), (14, "lkj;lkj Lastname") )
+class FuzzyListLMatchTest(unittest.TestCase):
     @classmethod
     def setUpClass(self):
-        pass
-
-    def test1(self):
-        self.assertEqual(main.fuzzyListMatch(data,"A Good Test STrring",80), [3,4])
-    def test2(self):
-        self.assertEqual(main.fuzzyListMatch(data,"l;kj;lkj",40), [])
-    def test3(self):
-        self.assertEqual(main.fuzzyListMatch(data, "Lastname, Firstname",70),[8,9,10,11,12])
+        self.data = ((1,"Good Tst"),(2,"Gibbrish Something Else"),(3,"A Good Test STrring"), (4,"A GoodTestStrign"),
+        (5,"kjlkja;ldkjf"), (6,"A Bad Test String"),(7,"Firstname, Lastname"), (8,"Lastname, Firstname"),
+        (9,"Firstname Lastname"), (10,"Lastname Firstname"), (11, "Firstname LAstnaem"),
+        (12, "LAsTnaem Firstname"), (13, "Something Firstname"), (14, "lkj;lkj Lastname"),
+        (15, "First Last"), (16,"Last First"))
+    def testTypicalUse(self):
+        self.assertEqual(main.fuzzyListMatch(self.data,"A Good Test String",10), [3])
+    def testGibberish(self):
+        self.assertEqual(main.fuzzyListMatch(self.data,"l;kj;lkj",10), [])
+    def testTokenization(self):
+        self.assertEqual(main.fuzzyListMatch(self.data, "Lastname, Firstname",50),[8,10,12])
+    def testExactMatch(self):
+        self.data = ((1,"abcde"), (2,"fghij"), (3,"klmno"), (4,"pqrst"), (5,"uvwxyz"))
+        self.assertEqual(main.fuzzyListMatch(self.data, "abcde",75),[1])
+        self.assertEqual(main.fuzzyListMatch(self.data, "fghij",75),[2])
+        self.assertEqual(main.fuzzyListMatch(self.data, "klmno",75),[3])
+        self.assertEqual(main.fuzzyListMatch(self.data, "pqrst",75),[4])
+        self.assertEqual(main.fuzzyListMatch(self.data, "uvwxyz",75),[5])
 
 class FilenameSanitizeTestCase(unittest.TestCase):
     @classmethod

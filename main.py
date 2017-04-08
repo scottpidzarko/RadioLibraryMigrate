@@ -69,6 +69,7 @@ import textwrap
 #fuzzy matching
 from fuzzysearch import find_near_matches
 from fuzzywuzzy import process
+from fuzzywuzzy import fuzz
 
 #Get data from config
 db_host = config.db_host
@@ -445,7 +446,7 @@ def fuzzySQLMatch(idcol, searchcol, table, searchstring, threshold):
     if data is None:
         return False
     for row in data:
-        if fuzzyContains(row[1], searchstring, threshold):
+        if fuzzyFuzzyMatches(row[1], searchstring, threshold):
             ret.append(row[0])
     return ret
 
@@ -457,7 +458,7 @@ def fuzzyListMatch(data, searchstring, threshold):
     if data is None:
         return False
     for row in data:
-        if fuzzyContains(row[1], searchstring, threshold):
+        if fuzzyMatches(row[1], searchstring, threshold):
             ret.append(row[0])
     return ret
 
@@ -664,12 +665,18 @@ def writeLog(instring):
     log.write(xstr(instring) + "\n")
     log.close()
 
-def fuzzyContains(qs, ls, threshold):
-    '''fuzzy matches 'qs' in 'ls' and returns true if there is a match close enough
-    '''
-    #handle None values
-    qs = xstr(qs)
-    ls = xstr(ls)
+def fuzzyMatches(stringone,stringtwo,threshold):
+    #optimize
+    if(stringone == stringtwo):
+        return True
+    elif(strinone is None or stringtwo is None)
+        return False
+
+    #ordering direct check with commas. optimize more
+    if(stringone == stringtwo.split(' ',1)[1] + ', ' + stringtwo.split(' ',1)[0]):
+        return True
+    if(stringtwo == stringone.split(' ')[1] + ', ' + stringone.split(' ',1)[0]):
+        return True
 
     #apply bucketing - optimize if the two strings are largely diffierent in size
     #set this to four characters for now
@@ -677,6 +684,30 @@ def fuzzyContains(qs, ls, threshold):
         return False
     if(len(ls) > len(qs) + 4):
         return False
+
+    #handle None values, convert to lower because capitalization
+    #isn't important with our dataset. Strip leading and tailing whitespace too
+    stringone=xstr(stringone).rstrip(" ").lstrip(" ").lower()
+    stringtwo=xstr(stringtwo).rstrip(" ").lstrip(" ").lower()
+
+    #Simple ratio
+    if(fuzz.ratio(stringone, stringtwo) > threshold):
+        return True
+
+    #match different ordering - firstname lastname matches lastname, firstname
+    if(fuzz.token_set_ratio(stringone,stringtwo) > threshold)
+        return True:
+
+    #catchall
+    return False
+
+#For needle in a haystack searches, not quite what we need!
+def fuzzyContains(qs, ls, threshold):
+    '''fuzzy matches 'qs' in 'ls' and returns true if there is a match close enough
+    '''
+    #handle None values
+    qs = xstr(qs)
+    ls = xstr(ls)
 
     for word, _ in process.extractBests(str(qs), (str(ls),), score_cutoff=threshold):
         #print('word {}'.format(word))
