@@ -669,20 +669,22 @@ def fuzzyMatches(stringone,stringtwo,threshold):
     #optimize
     if(stringone == stringtwo):
         return True
-    elif(strinone is None or stringtwo is None)
+    elif(stringone is None or stringtwo is None):
         return False
 
     #ordering direct check with commas. optimize more
-    if(stringone == stringtwo.split(' ',1)[1] + ', ' + stringtwo.split(' ',1)[0]):
-        return True
-    if(stringtwo == stringone.split(' ')[1] + ', ' + stringone.split(' ',1)[0]):
-        return True
-
+    try:
+        if(stringone == stringtwo.split(' ',1)[1] + ', ' + stringtwo.split(' ',1)[0]):
+            return True
+        if(stringtwo == stringone.split(' ')[1] + ', ' + stringone.split(' ',1)[0]):
+            return True
+    except IndexError:
+        pass
     #apply bucketing - optimize if the two strings are largely diffierent in size
     #set this to four characters for now
-    if(len(qs) > len(ls) + 4):
+    if(len(stringone) > len(stringtwo) + 4):
         return False
-    if(len(ls) > len(qs) + 4):
+    if(len(stringone) > len(stringtwo) + 4):
         return False
 
     #handle None values, convert to lower because capitalization
@@ -695,8 +697,12 @@ def fuzzyMatches(stringone,stringtwo,threshold):
         return True
 
     #match different ordering - firstname lastname matches lastname, firstname
-    if(fuzz.token_set_ratio(stringone,stringtwo) > threshold)
-        return True:
+    #be stricter on this
+    threshold = threshold + 15
+    if threshold > 95:
+        threshold = 95
+    if(fuzz.token_set_ratio(stringone,stringtwo) > threshold+15):
+        return True
 
     #catchall
     return False

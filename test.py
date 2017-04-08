@@ -59,7 +59,7 @@ class FuzzyListLMatchTest(unittest.TestCase):
         (12, "LAsTnaem Firstname"), (13, "Something Firstname"), (14, "lkj;lkj Lastname"),
         (15, "First Last"), (16,"Last First"))
     def testTypicalUse(self):
-        self.assertEqual(main.fuzzyListMatch(self.data,"A Good Test String",10), [3])
+        self.assertEqual(main.fuzzyListMatch(self.data,"A Good Test String",80), [3,4])
     def testGibberish(self):
         self.assertEqual(main.fuzzyListMatch(self.data,"l;kj;lkj",10), [])
     def testTokenization(self):
