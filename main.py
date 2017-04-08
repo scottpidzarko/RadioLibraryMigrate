@@ -449,6 +449,18 @@ def fuzzySQLMatch(idcol, searchcol, table, searchstring, threshold):
             ret.append(row[0])
     return ret
 
+#same function above but data source is not from a sql table
+#used for testing above without having to deal with sql
+#also if you ever want to do the above without sql
+def fuzzyListMatch(data, searchstring, threshold):
+    ret=[]
+    if data is None:
+        return False
+    for row in data:
+        if fuzzyContains(row[1], searchstring, threshold):
+            ret.append(row[0])
+    return ret
+
 #If the artist has a "The ______", change the name into "______, the"
 def formatArtist(artist):
     try:
@@ -659,12 +671,19 @@ def fuzzyContains(qs, ls, threshold):
     qs = xstr(qs)
     ls = xstr(ls)
 
-    for word, _ in process.extractBests(qs, (ls,), score_cutoff=threshold):
+    #apply bucketing - optimize if the two strings are largely diffierent in size
+    #set this to four characters for now
+    if(len(qs) > len(ls) + 4):
+        return False
+    if(len(ls) > len(qs) + 4):
+        return False
+
+    for word, _ in process.extractBests(str(qs), (str(ls),), score_cutoff=threshold):
         #print('word {}'.format(word))
-        for match in find_near_matches(qs, word, max_l_dist=1):
+        for match in find_near_matches(str(qs), word, max_l_dist=1):
             match = word[match.start:match.end]
             #print('match {}'.format(match))
-            index = ls.find(match)
+            index = str(ls).find(match)
             return True
 
     return False

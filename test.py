@@ -49,6 +49,22 @@ class FuzzyMatchTestCase(unittest.TestCase):
             #print(misspelling)
             self.assertEqual(main.fuzzyContains(misspelling, "local", 15), True)
 
+#Since this deals with database tests we will use a modified version of the function to test it on an
+class fuzzySQLMatch:
+    data = ((1,"Good Tst"),(2,"Gibbrish Something Else"),(3,"A Good Test String"), (4,"A GoodTestStrign"),
+    (5,"kjlkja;ldkjf"), (6,"A Bad Test String"),(7,"Firstname, Lastname"), (8,"Lastname, Firstname"),
+    (9,"Firstname Lastname"), (10,"Lastname Firstname"), (11, "Firstname LAstnaem"), (12, "LAsTnaem Firstname"), (13, "Something Firstname"), (14, "lkj;lkj Lastname") )
+    @classmethod
+    def setUpClass(self):
+        pass
+
+    def test1(self):
+        self.assertEqual(main.fuzzyListMatch(data,"A Good Test STrring",80), [3,4])
+    def test2(self):
+        self.assertEqual(main.fuzzyListMatch(data,"l;kj;lkj",40), [])
+    def test3(self):
+        self.assertEqual(main.fuzzyListMatch(data, "Lastname, Firstname",70),[8,9,10,11,12])
+
 class FilenameSanitizeTestCase(unittest.TestCase):
     @classmethod
     def setUpClass(self):
