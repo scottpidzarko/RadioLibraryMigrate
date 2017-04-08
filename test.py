@@ -57,11 +57,17 @@ class FilenameSanitizeTestCase(unittest.TestCase):
     def testLegitimateString(self):
         self.assertEqual(main.formatFileName("A totally Legit string"), "A totally Legit string")
         self.assertEqual(main.formatFileName("-_()$!@#^&~`+=[]}{'., %s%s" % (string.digits,'%')), "-_()$!@#^&~`+=[]}{'., %s%s" % (string.digits,'%'))
-        self.assertEqual(main.formatForDoubleFilePath("A totally Legit string"), "A totally Legit string".upper())
-        self.assertEqual(main.formatForDoubleFilePath("-_()$!@#^&~`+=[]}{\'., %s%s" % (string.digits,'%')), ("-_()$!@#^&~`+=[]}{\' %s%s" % (string.digits,'%')).upper())
-        self.assertEqual(main.formatFileName("TrailingSpaceTest "),"TrailingSpaceTest ")
-        self.assertEqual(main.formatForDoubleFilePath("TrailingSpaceTest "),"TRAILINGSPACETEST ")
-        self.assertEqual(main.formatFileName("PMUuKZYzT6bTUlwBQ9oZHDiTNq3ba9VyCMX70xIoMs02QOTgJ3z0kepsCSbSe2YawNrP4vvHugoqCwOGD4IhmFcyYTxWG6X26WiJ6uKT7JIcHhXNpmAqTwfPbGONmOV48yOfoQPQ409TETbrtLgfZcXgMCxavJtmYpP7HRVo58o9Z6RgbPwlgl6zazLJq9mSr0FPcHwsgFu9k4l7v2qyukBBkEwDI4Oug1W57q9jXEuo3jq7V5AAM3umAHIzSGM"),"PMUuKZYzT6bTUlwBQ9oZHDiTNq3ba9VyCMX70xIoMs02QOTgJ3z0kepsCSbSe2YawNrP4vvHugoqCwOGD4IhmFcyYTxWG6X26WiJ6uKT7JIcHhXNpmAqTwfPbGONmOV48yOfoQPQ409TETbrtLgfZcXgMCxavJtmYpP7HRVo58o9Z6RgbPwlgl6zazLJq9mSr0FPcHwsgFu9k4l7v2qyukBBkEwDI4Oug1W57q9jXEuo3jq7V5AAM3umA...")
+        self.assertEqual(main.formatForDoubleFilePath("Totally Legit string"), "TO")
+        self.assertEqual(main.formatForDoubleFilePath("-_()$!@#^&~`+=[]}{\'., %s%s" % (string.digits,'%')), ("-_"))
+        self.assertEqual(main.formatFileName("TrailingSpaceTest "),"TrailingSpaceTest")
+        self.assertEqual(main.formatForDoubleFilePath("A "),"A_")
+        self.maxDiff = None
+        self.assertEqual(main.formatFileName("PMUuKZYzT6bTUlwBQ9oZHDiTNq3ba9VyCMX70xIoMs02QOTgJ3z0kepsCSbSe2YawNrP4vvHugoqCwOGD4IhmFcyYTxWG6X26WiJ6uKT7JIcHhXNpmAqTwfPbGONmOV48yOfoQPQ409TETbrtLgfZcXgMCxavJtmYpP7HRVo58o9Z6RgbPwlgl6zazLJq9mSr0FPcHwsgFu9k4l7v2qyukBBkEwDI4Oug1W57q9jXEuo3jq" + \
+        "7V5AAM3umAHIzSGM.mp3"),"PMUuKZYzT6bTUlwBQ9oZHDiTNq3ba9VyCMX70xIoMs02QOTgJ3z0kepsCSbSe2YawNrP4vvHugoqCwOGD4IhmFcyYTxWG6X26WiJ6uKT7JIcHhXNpmAqTwfPbGONmOV48yOfoQPQ409TETbrtLgfZcXgMCxavJtmYpP7HRVo58o9Z6RgbPwlgl6zazLJq9mSr0FPcHwsgFu9k4l7v2qy" + \
+        "ukBBkEwDI4Oug1W57q9jXEuo3jq7V5AAM3u....mp3")
+        self.assertEqual(main.formatFileName(None),"---")
+        self.assertEqual(main.formatForDoubleFilePath(None),"--")
+        self.assertEqual(main.formatFileDirectory(None),"---")
 
     def testIllegitimateString(self):
         string = "A totally <>:\"/\|?* Not Legit string"
@@ -71,8 +77,18 @@ class FilenameSanitizeTestCase(unittest.TestCase):
     	 "LPT6", "LPT7", "LPT8", "LPT9", "nul")
         for s in badlist:
             self.assertEqual(main.formatFileName(s+".exe"), "(bad filename).exe")
-        self.assertEqual(main.formatForDoubleFilePath("A totally <>:\"/\|?* Not Legit string"), "A totally --------- Not Legit string".upper())
+        self.assertEqual(main.formatForDoubleFilePath("<>:\"/\|?* Not Legit string"), "--")
         self.assertEqual(main.formatFileName("One Girl / One Boy"),"One Girl - One Boy")
+
+class ArtistTheTestCase(unittest.TestCase):
+    @classmethod
+    def setUpClass(self):
+        pass
+
+    def testGood(self):
+        self.assertEqual(main.formatArtist("The Glitch Mob"), "Glitch Mob, The")
+    def testBad(self):
+        self.assertEqual(main.formatArtist("lkjaldkjfa;lkdsjf"), "lkjaldkjfa;lkdsjf")
 
 if __name__ == '__main__':
         unittest.main()

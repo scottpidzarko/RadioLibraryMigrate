@@ -135,9 +135,10 @@ def main():
             print("Artist: " + artist + ", Album: " + album_title + ", Title: " + song_title + ", #" + str(track_num))
 
             #try and find the albumID for the song from the library table first with an exact match and then a fuzzy finder
+            #and then try lastname, firstname alternatives with and without fuzzy matching
+
             sql = "SELECT id FROM library where title like %s;"
             data = executeSQL(sql, [album_title])
-
 
             if(data is not None and len(data) == 1):
                 #Found a unique match
@@ -207,13 +208,27 @@ def main():
                         moveError(path,f,albumartist,formatForDoubleFilePath(albumartist),album_title,track_num,song_title)
 
             else:
-                #no match, move to the "potential problems folder" and log, with potential matches using fuzzy finder
-                writeLog( "No match found for " + xstr(song_title))
-                #move to error folder
-                if not albumartist:
-                    moveError(path,f,artist,uppercaseArtist,album_title,track_num,song_title)
+                #try fuzzy matching:
+
+                if(data is not None and len(data) == 1):
+                    pass
+                elif(data is not None and len(data) > 1):
+                    pass
                 else:
-                    moveError(path,f,albumartist,formatForDoubleFilePath(albumartist),album_title,track_num,song_title)
+                    #try matching based on permutations of artist - ex. ADAM ANT vs. ANT, ADAM
+                    #try with and without commas
+                    if(data is not None and len(data) == 1):
+                        pass
+                    elif(data is not None and len(data) > 1):
+                        pass
+                    else:
+                        #no match, move to the "potential problems folder" and log, with potential matches using fuzzy finder
+                        writeLog( "No match found for " + xstr(song_title))
+                        #move to error folder
+                        if not albumartist:
+                            moveError(path,f,artist,uppercaseArtist,album_title,track_num,song_title)
+                        else:
+                            moveError(path,f,albumartist,formatForDoubleFilePath(albumartist),album_title,track_num,song_title)
 
 """""
 Runs the query given by sql query and the array of parameters given in params. Defaults to no parameters if none are passed
@@ -354,17 +369,21 @@ def getMP3Data(path,f):
     try:
         category = temp[u'COMM::eng'].text[0].lower()#[u'COMM:ID3v1 Comment:eng']
         #can safely default to category 20 since that's the most common
-        ##TODO: Better regex matching here
-        if(category == "category 1"):
-            ret['category'] = 10
-        elif(category == "category 3"):
-            ret['category'] = 30
-        elif(category == "category 4"):
-            ret['category'] = 40
-        elif(category == "category 5"):
-            ret['category'] = 50
+
+        if(fuzzyContains(category,"category",15)):
+            if category[-1] is '1':
+                ret['category'] = 10
+            if category[-1] is '3':
+                ret['category'] = 30
+            if category[-1] is '4':
+                ret['category'] = 40
+            if category[-1] is '5':
+                ret['category'] = 50
+            else:
+                ret['category'] = 20
         else:
             ret['category'] = 20
+
     except KeyError as e:
         writeLog("File " + f + " has no crtc category tagged")
         ret['category'] = None
@@ -416,6 +435,20 @@ def getMP3Data(path,f):
         ret['local'] = 0
     return ret
 
+#return id for row in SQL table with the column fuzzy equal to
+#WARNING: NOT AT ALL SAFE TO INJECTION
+#DO NOT USE WITH UNKNWOWN DATA
+def fuzzySQLMatch(idcol, searchcol, table, searchstring, threshold):
+    sql = "SELECT "+idcol+","+searchcol+" FROM "+table
+    data = executeSQL(sql)
+    ret=[]
+    if data is None:
+        return False
+    for row in data:
+        if fuzzyContains(row[1], searchstring, threshold):
+            ret.append(row[0])
+    return ret
+
 #If the artist has a "The ______", change the name into "______, the"
 def formatArtist(artist):
     try:
@@ -428,7 +461,7 @@ def formatArtist(artist):
 #return empty string if string is of none type
 def xstr(s):
     if s is None:
-        return ''
+        return '---'
     return str(s)
 
 # see https://stackoverflow.com/questions/62771/how-do-i-check-if-a-given-string-is-a-legal-valid-file-name-under-windows
@@ -449,7 +482,7 @@ def formatForDoubleFilePath(s):
                 filename += '-'
         filename = filename.replace('.','') #no periods in the doubles as discussed
         filename = filename.replace(',','') #no commas in the doubles as discussed
-        filename = filename.replace(' ','_') #no commas in the doubles as discussed
+        filename = filename.replace(' ','_') #can't have trailng space
         return filename.upper()[0:2]
     except TypeError as e:
         writeLog("Error in formatForDoubleFilePath(" + xstr(s) + "). The following error was thrown:")
@@ -459,12 +492,11 @@ def formatForDoubleFilePath(s):
 
 def formatFileDirectory(s):
     """Take a string and return a valid dirname constructed from the string.
-Uses a whitelist approach: any characters not present in valid_chars are
-removed.
-Note: this method may produce invalid filenames such as ``, `.` or `..`
-Be aware.
-
-"""
+    Uses a whitelist approach: any characters not present in valid_chars are
+    removed.
+    Note: this method may produce invalid filenames such as ``, `.` or `..`
+    Be aware.
+    """
     try:
         #handle None type:
         s = xstr(s)
@@ -485,10 +517,13 @@ Be aware.
 
         # can't have trailing dots in directories
         filename = filename.rstrip('.')
+        #can't have trailing spaces because win API
+        filename = filename.rstrip(' ')
 
         #trim if it's too long
+        #assume directory so no splitting on extension not necessary
         if(len(filename) > 250):
-            return filename[0:249]
+            return filename + "..."
         else:
             return filename
     except TypeError as e:
@@ -499,12 +534,11 @@ Be aware.
 
 def formatFileName(s):
     """Take a string and return a valid filename constructed from the string.
-Uses a whitelist approach: any characters not present in valid_chars are
-removed.
-Note: this method may produce invalid filenames such as ``, `.` or `..`
-Be aware.
-
-"""
+    Uses a whitelist approach: any characters not present in valid_chars are
+    removed.
+    Note: this method may produce invalid filenames such as ``, `.` or `..`
+    Be aware.
+    """
     try:
         #handle None type:
         s = xstr(s)
@@ -519,12 +553,16 @@ Be aware.
          "COM6", "COM7", "COM8", "COM9", "LPT1", "LPT2", "LPT3", "LPT4", "LPT5",
          "LPT6", "LPT7", "LPT8", "LPT9", "nul")
         if( filename.rsplit( ".", 1 )[ 0 ] in badlist):
-            return "(bad filename)." + filename.rsplit( ".",1)[ 1 ]
+            return "(bad filename)." + filename.rsplit( ".",1)[1]
         if ((filename == ".......") or (filename == "dir.exe")):
-            return "(bad filename)." + filename.rsplit( ".",1)[ 1 ]
+            return "(bad filename)." + filename.rsplit( ".",1)[1]
+
+        #can't have trailing spaces because win API
+        filename = filename.rstrip(' ')
+
         #trim if it's too long
         if(len(filename) > 250):
-            return filename[0:249] + "..."
+            return os.path.splitext(filename)[0][0:247] + "..." + os.path.splitext(filename)[1]
         else:
             return filename
     except TypeError as e:
