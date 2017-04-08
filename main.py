@@ -87,7 +87,15 @@ errorfiles = config.errorfile
 reForThe = re.compile('^the', re.IGNORECASE)
 dryRun = False
 
+#Cache these for fuzzy matching
+library_title = []
+library_title_artist = []
+
 def main():
+    global dryrun
+    global library_title
+    global library_title_artist
+    
     if(len(sys.argv) > 1 and (sys.argv[1] == "--dry-run" or sys.argv[2] == "--dry-run")):
         dryRun = True
     else:
@@ -96,14 +104,22 @@ def main():
             print( "Aborting ..." )
             return
 
+    sql = "SELECT id,title FROM library"
+    library_title = executeSQL(sql)
+    sql = "SELECT id,title,artist FROM library"
+    library_title_artist = executeSQL(sql)
+
     writeLog("----------------------------------------------------------------")
     writeLog("---  Library Conversion run started at " + str(datetime.now()) + "---")
     writeLog("----------------------------------------------------------------")
 
     for path, dirs, files in os.walk(libary_basedir):
+        #fuzzy searching for which allbum the songs belongs to is tedious.
+        #therefore keep track of the id for each set where common (ie. by folder)
+        this_id=0 #reset to zero here and override below for each directory
         print("Going into " + path)
         writeLog("Going into " + path)
-        for f in files:
+        for f in files:      
             writeLog("Processing: \"" + f + "\"")
             print("Processing: \"" + f + "\"");
 
@@ -135,16 +151,18 @@ def main():
             writeLog("Artist: " + xstr(artist) + ", Album: " + xstr(album_title) + ", Title: " + xstr(song_title) + ", #" + xstr(track_num))
             print("Artist: " + artist + ", Album: " + album_title + ", Title: " + song_title + ", #" + str(track_num))
 
-            #try and find the albumID for the song from the library table first with an exact match and then a fuzzy finder
-            #and then try lastname, firstname alternatives with and without fuzzy matching
-
-            sql = "SELECT id FROM library where title like %s;"
-            data = executeSQL(sql, [album_title])
-
+            if(this_id == 0):
+                #try and find the albumID for the song from the library table first with an exact match and then a fuzzy finder
+                #and then try lastname, firstname alternatives with and without fuzzy matching
+                data = fuzzySQLMatch("id","title","library",album_title,90)
+            else:
+                data = [this_id]
+            writeLog(data)
+            
             if(data is not None and len(data) == 1):
                 #Found a unique match
                 writeLog("Exact Match Found for " + xstr(song_title))
-                writeLog(data[0][0]);
+                writeLog(data[0]);
 
                 #move to correct folder
                 if not albumartist:
@@ -157,22 +175,27 @@ def main():
                 sql = "INSERT INTO library_songs (library_id, artist, album_artist, album_title, song_title, track_num, genre, compilation, crtc, year, length, file_location, updated_at, created_at) " + \
                 "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW(), NOW());"
                 if(not dryRun):
-                    executeSQL(sql, [data[0][0],artist, albumartist, album_title, song_title, track_num, genre, compilation, category, year, length, dest_filename])
+                    executeSQL(sql, [this_id,artist, albumartist, album_title, song_title, track_num, genre, compilation, category, year, length, dest_filename])
 
             elif(data is not None and len(data) > 1):
                 #Multiple albums with that name, try and match by artist
                 writeLog("Multiple albums found for " + album_title)
                 writeLog("Trying to match based on artist ...")
-                sql = "SELECT %s FROM library where title like %s and artist like %s;"
-                if not albumartist:
-                    data = executeSQL(sql, ["id",album_title,artist])
+                if(this_id == 0):
+                    #try and find the albumID for the song from the library table first with an exact match and then a fuzzy finder
+                    #and then try lastname, firstname alternatives with and without fuzzy matching
+                    if not albumartist:
+                        data = fuzzySQLMatch("id","title","library",album_title,87,"artist",artist)
+                    else:
+                        data = fuzzySQLMatch("id","title","library",album_title,87,"artist",albumartist)
                 else:
-                    data = executeSQL(sql, ["id",album_title,albumartist])
+                    data = [this_id]
+                writeLog(data)
 
                 if(data is not None and len(data) == 1):
                     ##Found a unique match
                     writeLog("Exact Match Found for " + xstr(song_title))
-                    writeLog(data[0][0]);
+                    writeLog(data[0]);
 
                     #move to correct folder
                     if not albumartist:
@@ -185,7 +208,7 @@ def main():
                     sql = "INSERT INTO library_songs (library_id, artist, album_artist, album_title, song_title, track_num, genre, compilation, crtc, year, length, file_location, updated_at, created_at) " + \
                     "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW(), NOW());"
                     if(not dryRun):
-                        executeSQL(sql, [data[0][0],artist, albumartist, album_title, song_title, track_num, genre, compilation, category, year, length, dest_filename])
+                        executeSQL(sql, [this_id,artist, albumartist, album_title, song_title, track_num, genre, compilation, category, year, length, dest_filename])
 
                 elif(data is not None and len(data) > 1):
                     #found many matches again
@@ -209,27 +232,13 @@ def main():
                         moveError(path,f,albumartist,formatForDoubleFilePath(albumartist),album_title,track_num,song_title)
 
             else:
-                #try fuzzy matching:
-
-                if(data is not None and len(data) == 1):
-                    pass
-                elif(data is not None and len(data) > 1):
-                    pass
+                #no match, move to the "potential problems folder" and log, with potential matches using fuzzy finder
+                writeLog( "No match found for " + xstr(song_title))
+                #move to error folder
+                if not albumartist:
+                    moveError(path,f,artist,uppercaseArtist,album_title,track_num,song_title)
                 else:
-                    #try matching based on permutations of artist - ex. ADAM ANT vs. ANT, ADAM
-                    #try with and without commas
-                    if(data is not None and len(data) == 1):
-                        pass
-                    elif(data is not None and len(data) > 1):
-                        pass
-                    else:
-                        #no match, move to the "potential problems folder" and log, with potential matches using fuzzy finder
-                        writeLog( "No match found for " + xstr(song_title))
-                        #move to error folder
-                        if not albumartist:
-                            moveError(path,f,artist,uppercaseArtist,album_title,track_num,song_title)
-                        else:
-                            moveError(path,f,albumartist,formatForDoubleFilePath(albumartist),album_title,track_num,song_title)
+                    moveError(path,f,albumartist,formatForDoubleFilePath(albumartist),album_title,track_num,song_title)
 
 """""
 Runs the query given by sql query and the array of parameters given in params. Defaults to no parameters if none are passed
@@ -439,17 +448,33 @@ def getMP3Data(path,f):
 #return id for row in SQL table with the column fuzzy equal to
 #WARNING: NOT AT ALL SAFE TO INJECTION
 #DO NOT USE WITH UNKNWOWN DATA
-def fuzzySQLMatch(idcol, searchcol, table, searchstring, threshold):
-    sql = "SELECT "+idcol+","+searchcol+" FROM "+table
-    data = executeSQL(sql)
-    ret=[]
-    if data is None:
-        return False
-    for row in data:
-        if fuzzyFuzzyMatches(row[1], searchstring, threshold):
-            ret.append(row[0])
-    return ret
-
+def fuzzySQLMatch(idcol, searchcol1, table, searchstring1, threshold, searchcol2=None, searchstring2=None):
+    if searchcol2 is None:
+        if(idcol == "id" and searchcol1 == "title" and table == "library"):
+            data = library_title
+        else:
+            sql = "SELECT "+idcol+","+searchcol1+" FROM "+table
+            data = executeSQL(sql)
+        ret=[]
+        if data is None:
+            return False
+        for row in data:
+            if fuzzyMatches(row[1], searchstring1, threshold):
+                ret.append(row[0])
+        return ret
+    else:
+        if(idcol == "id" and searchcol1 == "title" and searchcol2 == "artist" and table == "library"):
+            data = library_title_artist
+        else:
+            sql = "SELECT "+idcol+","+searchcol1+","+searchcol2+" FROM "+table
+            data = executeSQL(sql)
+        ret=[]
+        if data is None:
+            return False
+        for row in data:
+            if(fuzzyMatches(row[1], searchstring1, threshold) and fuzzyMatches(row[2], searchstring2, threshold)):
+                ret.append(row[0])
+        return ret
 #same function above but data source is not from a sql table
 #used for testing above without having to deal with sql
 #also if you ever want to do the above without sql
@@ -702,7 +727,7 @@ def fuzzyMatches(stringone,stringtwo,threshold):
             return True
     except IndexError:
         pass
-        
+
     #match different ordering - firstname lastname matches lastname, firstname
     if(fuzz.token_sort_ratio(stringone,stringtwo) > threshold):
         return True
