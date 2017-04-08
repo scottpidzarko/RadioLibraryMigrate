@@ -95,7 +95,7 @@ def main():
     global dryrun
     global library_title
     global library_title_artist
-    
+
     if(len(sys.argv) > 1 and (sys.argv[1] == "--dry-run" or sys.argv[2] == "--dry-run")):
         dryRun = True
     else:
@@ -119,7 +119,7 @@ def main():
         this_id=0 #reset to zero here and override below for each directory
         print("Going into " + path)
         writeLog("Going into " + path)
-        for f in files:      
+        for f in files:
             writeLog("Processing: \"" + f + "\"")
             print("Processing: \"" + f + "\"");
 
@@ -158,7 +158,7 @@ def main():
             else:
                 data = [this_id]
             writeLog(data)
-            
+
             if(data is not None and len(data) == 1):
                 #Found a unique match
                 writeLog("Exact Match Found for " + xstr(song_title))
@@ -685,9 +685,14 @@ def writeLog(instring):
     except FileNotFoundError:
         print( "Error: Log File does not appear to exist or you do not have the permissions to write to it!" )
         return
-    log.write( "[" + str(datetime.now()) + "]" + "    ")
-    #xstr handles none type
-    log.write(xstr(instring) + "\n")
+    try:
+        log.write( "[" + str(datetime.now()) + "]" + "    ")
+        #xstr handles none type
+        log.write(xstr(instring) + "\n")
+    except UnicodeEncodeError as e:
+        print("Unicode encoding error:")
+        print(e)
+        writeLog(e)
     log.close()
 
 def fuzzyMatches(stringone,stringtwo,threshold):
