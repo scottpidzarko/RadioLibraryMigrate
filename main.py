@@ -676,7 +676,7 @@ def fuzzyMatches(stringone,stringtwo,threshold):
     try:
         if(stringone == stringtwo.split(' ',1)[1] + ', ' + stringtwo.split(' ',1)[0]):
             return True
-        if(stringtwo == stringone.split(' ')[1] + ', ' + stringone.split(' ',1)[0]):
+        if(stringtwo == stringone.split(' ',1)[1] + ', ' + stringone.split(' ',1)[0]):
             return True
     except IndexError:
         pass
@@ -692,16 +692,19 @@ def fuzzyMatches(stringone,stringtwo,threshold):
     stringone=xstr(stringone).rstrip(" ").lstrip(" ").lower()
     stringtwo=xstr(stringtwo).rstrip(" ").lstrip(" ").lower()
 
-    #Simple ratio
+    #Simple ratio for the plain string as well as different ordering
     if(fuzz.ratio(stringone, stringtwo) > threshold):
         return True
-
+    try:
+        if(fuzz.ratio(stringone, stringtwo.split(' ',1)[1] + ', ' + stringtwo.split(' ',1)[0]) > threshold):
+            return True
+        if(fuzz.ratio(stringtwo, stringone.split(' ',1)[1] + ', ' + stringone.split(' ',1)[0]) > threshold):
+            return True
+    except IndexError:
+        pass
+        
     #match different ordering - firstname lastname matches lastname, firstname
-    #be stricter on this
-    threshold = threshold + 15
-    if threshold > 95:
-        threshold = 95
-    if(fuzz.token_set_ratio(stringone,stringtwo) > threshold+15):
+    if(fuzz.token_sort_ratio(stringone,stringtwo) > threshold):
         return True
 
     #catchall

@@ -57,20 +57,20 @@ class FuzzyListLMatchTest(unittest.TestCase):
         (5,"kjlkja;ldkjf"), (6,"A Bad Test String"),(7,"Firstname, Lastname"), (8,"Lastname, Firstname"),
         (9,"Firstname Lastname"), (10,"Lastname Firstname"), (11, "Firstname LAstnaem"),
         (12, "LAsTnaem Firstname"), (13, "Something Firstname"), (14, "lkj;lkj Lastname"),
-        (15, "First Last"), (16,"Last First"))
+        (15, "First Last"), (16,"Last First"), (17,"abcde"), (18,"fghij"), (19,"klmno"), (20,"pqrst"), (21,"uvwxyz"))
     def testTypicalUse(self):
-        self.assertEqual(main.fuzzyListMatch(self.data,"A Good Test String",80), [3,4])
+        #86+ is a good value for this
+        self.assertEqual(main.fuzzyListMatch(self.data,"A Good Test String",87), [3,4])
     def testGibberish(self):
-        self.assertEqual(main.fuzzyListMatch(self.data,"l;kj;lkj",10), [])
+        self.assertEqual(main.fuzzyListMatch(self.data,"l;kj;lkj",70), [])
     def testTokenization(self):
-        self.assertEqual(main.fuzzyListMatch(self.data, "Lastname, Firstname",50),[8,10,12])
+        self.assertEqual(main.fuzzyListMatch(self.data, "Lastname, Firstname",87),[7,8,9,10,11,12])
     def testExactMatch(self):
-        self.data = ((1,"abcde"), (2,"fghij"), (3,"klmno"), (4,"pqrst"), (5,"uvwxyz"))
-        self.assertEqual(main.fuzzyListMatch(self.data, "abcde",75),[1])
-        self.assertEqual(main.fuzzyListMatch(self.data, "fghij",75),[2])
-        self.assertEqual(main.fuzzyListMatch(self.data, "klmno",75),[3])
-        self.assertEqual(main.fuzzyListMatch(self.data, "pqrst",75),[4])
-        self.assertEqual(main.fuzzyListMatch(self.data, "uvwxyz",75),[5])
+        self.assertEqual(main.fuzzyListMatch(self.data, "abcde",75),[17])
+        self.assertEqual(main.fuzzyListMatch(self.data, "fghij",75),[18])
+        self.assertEqual(main.fuzzyListMatch(self.data, "klmno",75),[19])
+        self.assertEqual(main.fuzzyListMatch(self.data, "pqrst",75),[20])
+        self.assertEqual(main.fuzzyListMatch(self.data, "uvwxyz",75),[21])
 
 class FilenameSanitizeTestCase(unittest.TestCase):
     @classmethod
