@@ -161,16 +161,18 @@ def main():
                 #
                 #this_id keeps track of if we've found an id to avoid having to repeatedly fuzzy match
                 if(this_id == 0):
-
                     data = fuzzySQLMatch("id","title","library",album_title,90)
                 else:
-                    data = [this_id]
+                    #don't look again because we have matched an id
+                    pass
                 writeLog(data)
 
                 if(data is not None and len(data) == 1):
                     #Found a unique match
                     writeLog("Exact Match Found for " + xstr(song_title))
                     writeLog(data[0]);
+                    #assign this_id so that we can re-use it the entire directory
+                    this_id = data[0][0];
 
                     #move to correct folder
                     if not albumartist:
@@ -197,13 +199,14 @@ def main():
                         else:
                             data = fuzzySQLMatch("id","title","library",album_title,87,"artist",albumartist)
                     else:
-                        data = [this_id]
+                        pass
                     writeLog(data)
 
                     if(data is not None and len(data) == 1):
                         ##Found a unique match
                         writeLog("Exact Match Found for " + xstr(song_title))
-                        writeLog(data[0]);
+                        writeLog(data[0])
+                        this_id = data[0][0]
 
                         #move to correct folder
                         if not albumartist:
