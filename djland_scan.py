@@ -90,6 +90,8 @@ dryRun = False
 #Cache these for fuzzy matching
 library_title = []
 library_title_artist = []
+submissions_title = []
+submissions_title_artist = []
 
 def main():
     global dryrun
@@ -104,14 +106,15 @@ def main():
             print( "Aborting ..." )
             return
 
-    sql = "TRUNCATE `library_songs`"
-    executeSQL(sql)
-
     #cache the library table because it takes so long to retrieve
     sql = "SELECT id,title FROM library"
     library_title = executeSQL(sql)
     sql = "SELECT id,title,artist FROM library"
     library_title_artist = executeSQL(sql)
+    sql = "SELECT id,title FROM submissions"
+    submissions_title = executeSQL(sql)
+    sql = "SELECT id,title,artist FROM submissions"
+    submissions_title_artist = executeSQL(sql)
 
     writeLog("----------------------------------------------------------------")
     writeLog("---  Library Conversion run started at " + str(datetime.now()) + "---")
@@ -158,13 +161,12 @@ def main():
 
                 #try and find the albumID for the song from the library table first with an exact match and then a fuzzy finder
                 #and then try lastname, firstname alternatives with and without fuzzy matching
-                #
-                #this_id keeps track of if we've found an id to avoid having to repeatedly fuzzy match
-                if(this_id == 0):
-                    data = fuzzySQLMatch("id","title","library",album_title,90)
-                else:
-                    #don't look again because we have matched an id
-                    pass
+
+                #################################
+                #####  SEARCH Library LOOP  #####
+                #################################
+                data = fuzzySQLMatch("id","title","library",album_title,90)
+
                 writeLog(data)
 
                 if(data is not None and len(data) == 1):
@@ -191,15 +193,13 @@ def main():
                     #Multiple albums with that name, try and match by artist
                     writeLog("Multiple albums found for " + album_title)
                     writeLog("Trying to match based on artist ...")
-                    if(this_id == 0):
-                        #try and find the albumID for the song from the library table first with an exact match and then a fuzzy finder
-                        #and then try lastname, firstname alternatives with and without fuzzy matching
-                        if not albumartist:
-                            data = fuzzySQLMatch("id","title","library",album_title,87,"artist",artist)
-                        else:
-                            data = fuzzySQLMatch("id","title","library",album_title,87,"artist",albumartist)
+
+                    #try and find the albumID for the song from the library table first with an exact match and then a fuzzy finder
+                    #and then try lastname, firstname alternatives with and without fuzzy matching
+                    if not albumartist:
+                        data = fuzzySQLMatch("id","title","library",album_title,87,"artist",artist)
                     else:
-                        pass
+                        data = fuzzySQLMatch("id","title","library",album_title,87,"artist",albumartist)
                     writeLog(data)
 
                     if(data is not None and len(data) == 1):
@@ -251,11 +251,7 @@ def main():
                     else:
                         moveError(path,f,albumartist,formatForDoubleFilePath(albumartist),album_title,track_num,song_title)
 
-        #catch wonky errors because they keep happening
-        except Exception as e:
-            print(e)
-            writeLog(e)
-            continue
+
 """""
 Runs the query given by sql query and the array of parameters given in params. Defaults to no parameters if none are passed
 Example1:
@@ -777,6 +773,18 @@ def fuzzyContains(qs, ls, threshold):
 def moveLibrary(path,f,artist,uppercaseArtist,album_title,track_num,song_title):
     source_filename = os.path.normpath(path + "/" + f)
     dest_filename = os.path.normpath(library_destination + "/" + uppercaseArtist[0:1] + "/" +
+     uppercaseArtist[0:2] + "/" + formatFileDirectory(artist) + "/" + formatFileDirectory(album_title) + "/" +
+     formatFileName(track_num) + " " + formatFileName(artist) + " - " + formatFileName(song_title) + ".mp3")
+    ensure_dir(os.path.dirname(dest_filename))
+    if(not dryRun):
+        shutil.copy2(source_filename,dest_filename)
+    writeLog("Copied " + source_filename + " to " + dest_filename)
+
+    return dest_filename
+
+def moveSubmisisons(path,f,artist,uppercaseArtist,album_title,track_num,song_title):
+    source_filename = os.path.normpath(path + "/" + f)
+    dest_filename = os.path.normpath(submissions_destination + "/" + uppercaseArtist[0:1] + "/" +
      uppercaseArtist[0:2] + "/" + formatFileDirectory(artist) + "/" + formatFileDirectory(album_title) + "/" +
      formatFileName(track_num) + " " + formatFileName(artist) + " - " + formatFileName(song_title) + ".mp3")
     ensure_dir(os.path.dirname(dest_filename))
