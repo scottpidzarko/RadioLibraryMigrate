@@ -256,6 +256,7 @@ def main():
             print(e)
             writeLog(e)
             continue
+            
 """""
 Runs the query given by sql query and the array of parameters given in params. Defaults to no parameters if none are passed
 Example1:

@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/env python3
 
 ###########################
 ## Example Library usage ##
@@ -85,6 +85,11 @@ errorfiles = config.errorfile
 
 #regex pattern for detecting "the" at the start of a string
 reForThe = re.compile('^the', re.IGNORECASE)
+doImport = False
+
+# This has to be set to false as lots of the helper functions check for it
+# Maybe I'll re-write them eventually ( a lot of the helpers are from the
+# Library migrate script)
 dryRun = False
 
 #Cache these for fuzzy matching
@@ -94,21 +99,19 @@ submissions_title = []
 submissions_title_artist = []
 
 def main():
-    global dryrun
+    global doImport
+    global dryRun = False
     global library_title
     global library_title_artist
     global submissions_title
     global submissions_title_artist
 
-    if(len(sys.argv) > 1 and (sys.argv[1] == "--dry-run" or sys.argv[2] == "--dry-run")):
-        dryRun = True
+    if(len(sys.argv) > 1 and (sys.argv[1] == "--action")):
+        doImport = True
     else:
-        dryRun = False
-        if( not query_yes_no("This is a *live* run. Are you sure?", "no")):
-            print( "Aborting ..." )
-            return
+        doImport = False
 
-    #cache the library table because it takes so long to retrieve
+    #cache the library and submissions tables because it takes so long to retrieve
     sql = "SELECT id,title FROM library"
     library_title = executeSQL(sql)
     sql = "SELECT id,title,artist FROM library"
@@ -118,7 +121,7 @@ def main():
     sql = "SELECT id,title,artist FROM submissions"
     submissions_title_artist = executeSQL(sql)
 
-    if not dryRun:
+    if doImport:
         writeLog("----------------------------------------------------------------")
         writeLog("---  DJLand Import started at " + str(datetime.now()) + "---")
         writeLog("----------------------------------------------------------------")
@@ -128,228 +131,211 @@ def main():
         writeLog("----------------------------------------------------------------")
 
     #Traverse all the files in the input directory and generate potential actions
-    for path, dirs, files in os.walk(libary_basedir):
-        try:
-            #fuzzy searching for which allbum the songs belongs to is tedious.
-            #therefore keep track of the id for each set where common (ie. by folder)
-            this_id=0 #reset to zero here and override below for each directory
-            print("Going into " + path)
-            writeLog("Going into " + path)
-            for f in files:
-                writeLog("Processing: \"" + xstr(f) + "\"")
-                print("Processing: \"" + xstr(f) + "\"");
+    if not doImport:
+        for path, dirs, files in os.walk(libary_basedir):
+            try:
+                #fuzzy searching for which allbum the songs belongs to is tedious.
+                #therefore keep track of the id for each set where common (ie. by folder)
+                this_id=0 #reset to zero here and override below for each directory
+                writeLog("Going into " + path)
+                for f in files:
+                    writeLog("Processing: \"" + xstr(f) + "\"")
 
-                tagData = getMP3Data(path,f)
-                if(not tagData):
-                    continue
+                    #Ignore files that are not mp3
+                    tagData = getMP3Data(path,f)
+                    if(not tagData):
+                        continue
 
-                album_title = tagData['album_title']
-                song_title = tagData['song_title']
-                track_num = tagData['track_num']
-                category = tagData['category']
-                albumartist = tagData['albumartist']
-                #Determine if the artist has "the" in their name/group
-                #if so, will use "artist, the" structure
-                artist = formatArtist(tagData['artist']);
-                #for filepath moving - precompute
-                uppercaseArtist = formatForDoubleFilePath(formatArtist(tagData['artist']))
-                if(album_title == artist):
-                    selfTitled = 1
-                elif(album_title == albumartist):
-                    selfTitled = 1
-                else:
-                    selfTitled = 0
-                compilation = tagData['compilation']
-                length = tagData['length']
-                genre = tagData['genre']
-                year = tagData['year']
-
-                writeLog("Artist: " + xstr(artist) + ", Album: " + xstr(album_title) + ", Title: " + xstr(song_title) + ", #" + xstr(track_num))
-                print("Artist: " + xstr(artist) + ", Album: " + xstr(album_title) + ", Title: " + xstr(song_title) + ", #" + xstr(track_num))
-
-                #try and find the albumID for the song from the library table first with an exact match and then a fuzzy finder
-                #and then try lastname, firstname alternatives with and without fuzzy matching
-
-                #################################
-                #####  SEARCH Library LOOP  #####
-                #################################
-                data = fuzzySQLMatch("id","title","library",album_title,90)
-
-                writeLog(data)
-
-                if(data is not None and len(data) == 1):
-                    #Found a unique match
-                    writeLog("Exact Match Found for " + xstr(song_title))
-                    writeLog(data[0]);
-                    #assign this_id so that we can re-use it the entire directory
-                    this_id = data[0];
-
-                    #move to correct folder
-                    if not albumartist:
-                        dest_filename = moveLibrary(path,f,artist,uppercaseArtist,album_title,track_num,song_title)
+                    album_title = tagData['album_title']
+                    song_title = tagData['song_title']
+                    track_num = tagData['track_num']
+                    category = tagData['category']
+                    albumartist = tagData['albumartist']
+                    #Determine if the artist has "the" in their name/group
+                    #if so, will use "artist, the" structure
+                    artist = formatArtist(tagData['artist']);
+                    #for filepath moving - precompute
+                    uppercaseArtist = formatForDoubleFilePath(formatArtist(tagData['artist']))
+                    if(album_title == artist):
+                        selfTitled = 1
+                    elif(album_title == albumartist):
+                        selfTitled = 1
                     else:
-                        dest_filename = moveLibrary(path,f,albumartist,formatForDoubleFilePath(albumartist),album_title,track_num,song_title)
+                        selfTitled = 0
+                    compilation = tagData['compilation']
+                    length = tagData['length']
+                    genre = tagData['genre']
+                    year = tagData['year']
 
-                    #Write to DB
-                    #DB will assign song ID so we're good
-                    sql = "INSERT INTO library_songs (library_id, artist, album_artist, album_title, song_title, track_num, genre, compilation, crtc, year, length, file_location, updated_at, created_at) " + \
-                    "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW(), NOW());"
-                    if(not dryRun):
-                        executeSQL(sql, [this_id,artist, albumartist, album_title, song_title, track_num, genre, compilation, category, year, length, dest_filename])
-
-                elif(data is not None and len(data) > 1):
-                    #Multiple albums with that name, try and match by artist
-                    writeLog("Multiple albums found for " + album_title)
-                    writeLog("Trying to match based on artist ...")
+                    writeLog("Artist: " + xstr(artist) + ", Album: " + xstr(album_title) + ", Title: " + xstr(song_title) + ", #" + xstr(track_num))
 
                     #try and find the albumID for the song from the library table first with an exact match and then a fuzzy finder
                     #and then try lastname, firstname alternatives with and without fuzzy matching
-                    if not albumartist:
-                        data = fuzzySQLMatch("id","title","library",album_title,87,"artist",artist)
-                    else:
-                        data = fuzzySQLMatch("id","title","library",album_title,87,"artist",albumartist)
+
+                    #################################
+                    #####  SEARCH Library LOOP  #####
+                    #################################
+                    data = fuzzySQLMatch("id","title","library",album_title,90)
+
                     writeLog(data)
 
                     if(data is not None and len(data) == 1):
-                        ##Found a unique match
-                        writeLog("Exact Match Found for " + xstr(song_title))
-                        writeLog(data[0])
-                        this_id = data[0]
+                        #Found a unique match
+                        writeLog("Exact Match Found in library for " + xstr(song_title))
+                        writeLog(data[0]);
+                        #assign this_id so that we can re-use it the entire directory
+                        this_id = data[0];
 
                         #move to correct folder
                         if not albumartist:
-                            dest_filename = moveLibrary(path,f,artist,uppercaseArtist,album_title,track_num,song_title)
+                            dest_filename = fakeMoveLibrary(path,f,artist,uppercaseArtist,album_title,track_num,song_title)
                         else:
-                            dest_filename = moveLibrary(path,f,albumartist,formatForDoubleFilePath(albumartist),album_title,track_num,song_title)
+                            dest_filename = fakeMoveLibrary(path,f,albumartist,formatForDoubleFilePath(albumartist),album_title,track_num,song_title)
 
                         #Write to DB
                         #DB will assign song ID so we're good
                         sql = "INSERT INTO library_songs (library_id, artist, album_artist, album_title, song_title, track_num, genre, compilation, crtc, year, length, file_location, updated_at, created_at) " + \
                         "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW(), NOW());"
-                        if(not dryRun):
-                            executeSQL(sql, [this_id,artist, albumartist, album_title, song_title, track_num, genre, compilation, category, year, length, dest_filename])
 
                     elif(data is not None and len(data) > 1):
-                        #found many matches again
-                        #no match, move to the "potential problems folder" and log, with potential matches using fuzzy finder
-                        writeLog( "Too many Matches found for " + xstr(song_title))
+                        #Multiple albums with that name, try and match by artist
+                        writeLog("Multiple albums found in library for " + album_title)
+                        writeLog("Trying to match based on artist ...")
 
-                        #move to error folder
+                        #try and find the albumID for the song from the library table first with an exact match and then a fuzzy finder
+                        #and then try lastname, firstname alternatives with and without fuzzy matching
                         if not albumartist:
-                            moveError(path,f,artist,uppercaseArtist,album_title,track_num,song_title)
+                            data = fuzzySQLMatch("id","title","library",album_title,87,"artist",artist)
                         else:
-                            moveError(path,f,albumartist,formatForDoubleFilePath(albumartist),album_title,track_num,song_title)
-                    else:
-                        #No matches found - title is matching multiple but can't find an artist name
-                        #move into "inconclusive" folder
-                        #no match, move to the "potential problems folder" and log, with potential matches using fuzzy finder
-                        writeLog( "No match found for " + song_title)
-                        #move to error folder
-                        if not albumartist:
-                            moveError(path,f,artist,uppercaseArtist,album_title,track_num,song_title)
+                            data = fuzzySQLMatch("id","title","library",album_title,87,"artist",albumartist)
+                        writeLog(data)
+
+                        if(data is not None and len(data) == 1):
+                            ##Found a unique match
+                            writeLog("Exact Match Found in library for " + xstr(song_title))
+                            writeLog(data[0])
+                            this_id = data[0]
+
+                            #move to correct folder
+                            if not albumartist:
+                                dest_filename = fakeMoveLibrary(path,f,artist,uppercaseArtist,album_title,track_num,song_title)
+                            else:
+                                dest_filename = fakeMoveLibrary(path,f,albumartist,formatForDoubleFilePath(albumartist),album_title,track_num,song_title)
+
+                            #Write to DB
+                            #DB will assign song ID so we're good
+                            sql = "INSERT INTO library_songs (library_id, artist, album_artist, album_title, song_title, track_num, genre, compilation, crtc, year, length, file_location, updated_at, created_at) " + \
+                            "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW(), NOW());"
+                        elif(data is not None and len(data) > 1):
+                            #TODO: djland scan can choose from matches
+                            writeLog( "Too many matches found in library for " + xstr(song_title))
+                            writeLog( "Trying to look in submissions table for unique match ")
                         else:
-                            moveError(path,f,albumartist,formatForDoubleFilePath(albumartist),album_title,track_num,song_title)
-
-                else:
-                    #no match, move to the "potential problems folder" and log, with potential matches using fuzzy finder
-                    writeLog( "No match found for " + xstr(song_title))
-                    #move to error folder
-                    if not albumartist:
-                        moveError(path,f,artist,uppercaseArtist,album_title,track_num,song_title)
+                            #no match, try submissions next
+                            writeLog( "No match found in library for " + xstr(song_title))
+                            writeLog( "Trying to look in submissions table for a match ")
                     else:
-                        moveError(path,f,albumartist,formatForDoubleFilePath(albumartist),album_title,track_num,song_title)
+                        #no match, try submissions next
+                        writeLog( "No match found in library for " + xstr(song_title))
+                        writeLog( "Trying to look in submissions table for a match ")
 
-                #####################################
-                #####  SEARCH Submisisons LOOP  #####
-                #####################################
-                data = fuzzySQLMatch("id","title","submissions",album_title,90)
 
-                writeLog(data)
+                    #####################################
+                    #####  SEARCH Submisisons LOOP  #####
+                    #####################################
+                    data = fuzzySQLMatch("id","title","submissions",album_title,90)
 
-                if(data is not None and len(data) == 1):
-                    #Found a unique match
-                    writeLog("Exact Match Found for " + xstr(song_title))
-                    writeLog(data[0]);
-                    #assign this_id so that we can re-use it the entire directory
-                    this_id = data[0];
-
-                    #move to correct folder
-                    if not albumartist:
-                        dest_filename = moveSubmisisons(path,f,artist,uppercaseArtist,album_title,track_num,song_title)
-                    else:
-                        dest_filename = moveSubmissions(path,f,albumartist,formatForDoubleFilePath(albumartist),album_title,track_num,song_title)
-
-                    #Write to DB
-                    #DB will assign song ID so we're good
-                    sql = "INSERT INTO submissions_songs (submission_id, artist, album_artist, album_title, song_title, track_num, genre, compilation, crtc, year, length, file_location, updated_at, created_at) " + \
-                    "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW(), NOW());"
-                    if(not dryRun):
-                        executeSQL(sql, [this_id,artist, albumartist, album_title, song_title, track_num, genre, compilation, category, year, length, dest_filename])
-
-                elif(data is not None and len(data) > 1):
-                    #Multiple albums with that name, try and match by artist
-                    writeLog("Multiple albums found for " + album_title)
-                    writeLog("Trying to match based on artist ...")
-
-                    #try and find the albumID for the song from the library table first with an exact match and then a fuzzy finder
-                    #and then try lastname, firstname alternatives with and without fuzzy matching
-                    if not albumartist:
-                        data = fuzzySQLMatch("id","title","submissions",album_title,87,"artist",artist)
-                    else:
-                        data = fuzzySQLMatch("id","title","submissions",album_title,87,"artist",albumartist)
                     writeLog(data)
 
                     if(data is not None and len(data) == 1):
-                        ##Found a unique match
-                        writeLog("Exact Match Found for " + xstr(song_title))
-                        writeLog(data[0])
-                        this_id = data[0]
+                        #Found a unique match
+                        writeLog("Exact Match Found in submissions for " + xstr(song_title))
+                        writeLog(data[0]);
+                        #assign this_id so that we can re-use it the entire directory
+                        this_id = data[0];
 
                         #move to correct folder
                         if not albumartist:
-                            dest_filename = moveSubmisisons(path,f,artist,uppercaseArtist,album_title,track_num,song_title)
+                            dest_filename = fakeMoveSubmisisons(path,f,artist,uppercaseArtist,album_title,track_num,song_title)
                         else:
-                            dest_filename = moveSubmissions(path,f,albumartist,formatForDoubleFilePath(albumartist),album_title,track_num,song_title)
+                            dest_filename = fakeMoveSubmissions(path,f,albumartist,formatForDoubleFilePath(albumartist),album_title,track_num,song_title)
 
                         #Write to DB
                         #DB will assign song ID so we're good
-                        sql = "INSERT INTO submissions_songs (submissions_id, artist, album_artist, album_title, song_title, track_num, genre, compilation, crtc, year, length, file_location, updated_at, created_at) " + \
+                        sql = "INSERT INTO submissions_songs (submission_id, artist, album_artist, album_title, song_title, track_num, genre, compilation, crtc, year, length, file_location, updated_at, created_at) " + \
                         "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW(), NOW());"
-                        if(not dryRun):
-                            executeSQL(sql, [this_id,artist, albumartist, album_title, song_title, track_num, genre, compilation, category, year, length, dest_filename])
 
                     elif(data is not None and len(data) > 1):
-                        #found many matches again
+                        #Multiple albums with that name, try and match by artist
+                        writeLog("Multiple albums found in submissions for " + album_title)
+                        writeLog("Trying to match based on artist ...")
+
+                        #try and find the albumID for the song from the library table first with an exact match and then a fuzzy finder
+                        #and then try lastname, firstname alternatives with and without fuzzy matching
+                        if not albumartist:
+                            data = fuzzySQLMatch("id","title","submissions",album_title,87,"artist",artist)
+                        else:
+                            data = fuzzySQLMatch("id","title","submissions",album_title,87,"artist",albumartist)
+                        writeLog(data)
+
+                        if(data is not None and len(data) == 1):
+                            ##Found a unique match
+                            writeLog("Exact Match Found in submissions for " + xstr(song_title))
+                            writeLog(data[0])
+                            this_id = data[0]
+
+                            #move to correct folder
+                            if not albumartist:
+                                dest_filename = fakeMoveSubmisisons(path,f,artist,uppercaseArtist,album_title,track_num,song_title)
+                            else:
+                                dest_filename = fakeMoveSubmissions(path,f,albumartist,formatForDoubleFilePath(albumartist),album_title,track_num,song_title)
+
+                            #Write to DB
+                            #DB will assign song ID so we're good
+                            sql = "INSERT INTO submissions_songs (submissions_id, artist, album_artist, album_title, song_title, track_num, genre, compilation, crtc, year, length, file_location, updated_at, created_at) " + \
+                            "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW(), NOW());"
+
+                        elif(data is not None and len(data) > 1):
+                            #found many matches again
+                            #no match, move to the "potential problems folder" and log, with potential matches using fuzzy finder
+                            writeLog( "Too many Matches found in submissions in for " + xstr(song_title))
+
+                            #TODO: DJLAND scan offers to choose from multiple matches
+
+                            #move to error folder
+                            if not albumartist:
+                                fakeMoveError(path,f,artist,uppercaseArtist,album_title,track_num,song_title)
+                            else:
+                                fakeMoveError(path,f,albumartist,formatForDoubleFilePath(albumartist),album_title,track_num,song_title)
+                        else:
+                            #No matches found - title is matching multiple but can't find an artist name
+                            #move into "inconclusive" folder
+                            #no match, move to the "potential problems folder" and log, with potential matches using fuzzy finder
+                            writeLog( "No match found in submissions for " + song_title)
+                            writeLog( "Adding to error list")
+
+                            #move to error folder
+                            if not albumartist:
+                                fakeMoveError(path,f,artist,uppercaseArtist,album_title,track_num,song_title)
+                            else:
+                                fakeMoveError(path,f,albumartist,formatForDoubleFilePath(albumartist),album_title,track_num,song_title)
+
+                    else:
                         #no match, move to the "potential problems folder" and log, with potential matches using fuzzy finder
-                        writeLog( "Too many Matches found for " + xstr(song_title))
+                        writeLog( "No match found in submissions for " + song_title)
+                        writeLog( "Adding to error list")
 
                         #move to error folder
                         if not albumartist:
-                            moveError(path,f,artist,uppercaseArtist,album_title,track_num,song_title)
+                            fakeMoveError(path,f,artist,uppercaseArtist,album_title,track_num,song_title)
                         else:
-                            moveError(path,f,albumartist,formatForDoubleFilePath(albumartist),album_title,track_num,song_title)
-                    else:
-                        #No matches found - title is matching multiple but can't find an artist name
-                        #move into "inconclusive" folder
-                        #no match, move to the "potential problems folder" and log, with potential matches using fuzzy finder
-                        writeLog( "No match found for " + song_title)
-                        #move to error folder
-                        if not albumartist:
-                            moveError(path,f,artist,uppercaseArtist,album_title,track_num,song_title)
-                        else:
-                            moveError(path,f,albumartist,formatForDoubleFilePath(albumartist),album_title,track_num,song_title)
+                            fakeMoveError(path,f,albumartist,formatForDoubleFilePath(albumartist),album_title,track_num,song_title)
 
-                else:
-                    #no match, move to the "potential problems folder" and log, with potential matches using fuzzy finder
-                    writeLog( "No match found for " + xstr(song_title))
-                    #move to error folder
-                    if not albumartist:
-                        moveError(path,f,artist,uppercaseArtist,album_title,track_num,song_title)
-                    else:
-                        moveError(path,f,albumartist,formatForDoubleFilePath(albumartist),album_title,track_num,song_title)
+        return retArray
 
-    return retArray
-
+    #Do a move action specified after getting intial scan results
+    else:
+        pass
 """""
 Runs the query given by sql query and the array of parameters given in params. Defaults to no parameters if none are passed
 Example1:
@@ -901,6 +887,21 @@ def moveError(path,f,artist,uppercaseArtist,album_title,track_num,song_title):
     if(not dryRun):
         shutil.copy2(source_filename,dest_filename)
     writeLog("Copied " + source_filename + " to " + dest_filename)
+
+def fakeMoveLibrary(path,f,artist,uppercaseArtist,album_title,track_num,song_title):
+    return os.path.normpath(library_destination + "/" + uppercaseArtist[0:1] + "/" +
+     uppercaseArtist[0:2] + "/" + formatFileDirectory(artist) + "/" + formatFileDirectory(album_title) + "/" +
+     formatFileName(track_num) + " " + formatFileName(artist) + " - " + formatFileName(song_title) + ".mp3")
+
+def fakeMoveSubmisisons(path,f,artist,uppercaseArtist,album_title,track_num,song_title):
+    return os.path.normpath(submissions_destination + "/" + uppercaseArtist[0:1] + "/" +
+     uppercaseArtist[0:2] + "/" + formatFileDirectory(artist) + "/" + formatFileDirectory(album_title) + "/" +
+     formatFileName(track_num) + " " + formatFileName(artist) + " - " + formatFileName(song_title) + ".mp3")
+
+def fakeMoveError(path,f,artist,uppercaseArtist,album_title,track_num,song_title):
+    return os.path.normpath(working_directory + "/" + errorfiles + "/" + uppercaseArtist[0:1] + "/" +
+     uppercaseArtist[0:2] + "/" + formatFileDirectory(artist) + "/" + formatFileDirectory(album_title) + "/" +
+     formatFileName(track_num) + " " + formatFileName(artist) + " - " + formatFileName(song_title) + ".mp3")
 
 if __name__ == "__main__":
     main()
